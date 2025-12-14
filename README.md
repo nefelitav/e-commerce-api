@@ -14,9 +14,6 @@ classDiagram
     InventoryHistory "*" --> "1" Product : belongs_to
 ```
 
-![UML Diagram](uml.png)
-
-
 2. Categories
 POST /categories → create a category
 GET /categories → list all categories
