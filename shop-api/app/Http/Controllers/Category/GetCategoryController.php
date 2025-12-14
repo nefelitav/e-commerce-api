@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Category;
 
+use App\Exceptions\BadRequestException;
 use App\Exceptions\CategoryNotFoundException;
 use App\Exceptions\UnprocessableEntityException;
 use App\Http\Controllers\Controller;
@@ -48,7 +49,7 @@ final readonly class GetCategoryController extends Controller
         }
 
         if ($category === null) {
-            throw new CategoryNotFoundException($validatedData['id']);
+            throw new BadRequestException();
         }
 
         $foundCategory = $this->transformer->transform($category);

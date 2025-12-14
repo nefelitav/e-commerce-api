@@ -14,4 +14,12 @@ trait ApiResponse
             'data' => $data->toArray(),
         ], $status);
     }
+
+    protected function error(string $message = 'Error', int $status = 400,): JsonResponse
+    {
+        return response()->json([
+            'success' => false,
+            'message' => $message,
+        ], $status);
+    }
 }
