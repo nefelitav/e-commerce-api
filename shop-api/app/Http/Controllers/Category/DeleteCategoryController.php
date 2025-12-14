@@ -25,7 +25,7 @@ final readonly class DeleteCategoryController extends Controller
     ) {
     }
 
-    public function delete(DeleteCategoryRequest $request): JsonResponse
+    public function destroy(DeleteCategoryRequest $request): JsonResponse
     {
         $deleteCategoryResponse = $this->executeRequest($request);
 

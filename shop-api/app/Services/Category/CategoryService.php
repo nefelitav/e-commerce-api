@@ -23,6 +23,14 @@ final readonly class CategoryService
         return $this->repository->getAll();
     }
 
+    /**
+     * @return array<Category>
+     */
+    public function listSubcategories(int $id): array
+    {
+        return $this->repository->getSubcategoriesById($id);
+    }
+
     public function getCategoryById(int $id): ?Category
     {
         return $this->repository->findById($id);

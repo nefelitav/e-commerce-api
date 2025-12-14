@@ -24,7 +24,7 @@ final readonly class ListCategoriesController extends Controller
     ) {
     }
 
-    public function list(): JsonResponse
+    public function index(): JsonResponse
     {
         $listCategoriesResponse = $this->executeRequest();
 

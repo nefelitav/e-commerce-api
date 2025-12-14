@@ -27,16 +27,13 @@ final readonly class GetCategoryController extends Controller
     ) {
     }
 
-    public function get(GetCategoryRequest $request): JsonResponse
+    public function show(GetCategoryRequest $request): JsonResponse
     {
         $getCategoryResponse = $this->executeRequest($request);
 
         return self::success($getCategoryResponse, Response::HTTP_FOUND);
     }
 
-    /**
-     * @throws CategoryNotFoundException
-     */
     private function executeRequest(GetCategoryRequest $request): GetCategoryResponse
     {
         try {
