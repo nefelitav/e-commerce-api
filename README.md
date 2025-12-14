@@ -4,21 +4,17 @@
 classDiagram
     User "1" --> "0..*" Order : places
     User "1" --> "1" Cart : owns
-    User "1" --> "0..*" Review : writes
     Order "1" --> "1..*" OrderItem : contains
     Product "1" --> "0..*" OrderItem : appears_in
-    Order "0..1" --> "1" Discount : applies
     Cart "1" --> "0..*" CartItem : contains
     Product "1" --> "0..*" CartItem : appears_in
-    Cart "0..1" --> "1" Discount : applies
-    Product "1" --> "0..*" Review : has
     Product "1" --> "0..*" InventoryHistory : tracks
     Category "1" --> "0..*" Product : contains
     Category "0..1" --> "0..*" Category : parent
     InventoryHistory "*" --> "1" Product : belongs_to
 ```
 
-![class-uml.png](class-uml.png)
+![UML Diagram](uml.png)
 
 
 2. Categories
@@ -51,26 +47,12 @@ POST /orders/:orderId/items → add product to order
 PUT /orders/:orderId/items/:itemId → update quantity
 DELETE /orders/:orderId/items/:itemId → remove item
 
-6. Reviews
-POST /products/:productId/reviews → add review
-GET /products/:productId/reviews → list product reviews
-PUT /reviews/:id → update review
-DELETE /reviews/:id → delete review
-
 7. Cart
 POST /cart → create a cart (usually auto-created for user)
 GET /cart/:userId → get user’s cart
 POST /cart/:cartId/items → add item to cart
 PUT /cart/:cartId/items/:itemId → update item quantity
 DELETE /cart/:cartId/items/:itemId → remove item
-
-9. Discounts
-POST /discounts → create discount/coupon
-GET /discounts → list all discounts
-GET /discounts/:id → get discount details
-PUT /discounts/:id → update discount
-DELETE /discounts/:id → delete discount
-POST /orders/:orderId/apply-discount → apply discount to order
 
 10. Advanced / Optional
 GET /inventory-history/:productId → see stock changes

@@ -16,8 +16,6 @@ return new class extends Migration
             $table->foreignId('user_id')->index()->constrained();
             $table->string('status')->index();
             $table->decimal('total_price', 10, 2);
-            $table->foreignId('discount_id')->nullable()->constrained('discounts')->nullOnDelete();
-            $table->decimal('discount_amount', 10, 2)->default(0);
             $table->timestamps();
         });
     }

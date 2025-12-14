@@ -14,7 +14,6 @@ return new class extends Migration
         Schema::create('carts', function (Blueprint $table) {
             $table->id();
             $table->foreignId('user_id')->index()->constrained();
-            $table->foreignId('discount_id')->nullable()->constrained('discounts')->nullOnDelete();
             $table->timestamps();
         });
     }
