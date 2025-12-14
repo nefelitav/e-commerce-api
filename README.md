@@ -1,49 +1,24 @@
 # shop-api
 
-Users
-id, name, email, password_hash, role, created_at, updated_at
+```mermaid
+classDiagram
+    User "1" --> "0..*" Order : places
+    User "1" --> "1" Cart : owns
+    User "1" --> "0..*" Review : writes
+    Order "1" --> "1..*" OrderItem : contains
+    Product "1" --> "0..*" OrderItem : appears_in
+    Order "0..1" --> "1" Discount : applies
+    Cart "1" --> "0..*" CartItem : contains
+    Product "1" --> "0..*" CartItem : appears_in
+    Cart "0..1" --> "1" Discount : applies
+    Product "1" --> "0..*" Review : has
+    Product "1" --> "0..*" InventoryHistory : tracks
+    Category "1" --> "0..*" Product : contains
+    Category "0..1" --> "0..*" Category : parent
+    InventoryHistory "*" --> "1" Product : belongs_to
+```
 
-Categories
-id, name, description, parent_id
-
-Products
-id, name, description, price, stock_quantity, category_id, created_at, updated_at
-
-Orders
-id, user_id, status, total_price, created_at, updated_at
-
-Order_Items
-id, order_id, product_id, quantity, unit_price
-
-Reviews
-id, user_id, product_id, rating, comment, created_at
-
-Carts
-id, user_id, created_at, updated_at
-
-Cart_Items
-id, cart_id, product_id, quantity
-
-Wishlists
-id, user_id
-
-Wishlist_Items
-id, wishlist_id, product_id
-
-Discounts
-id, code, description, discount_type, amount, start_date, end_date, usage_limit
-
-Inventory_History
-id, product_id, change_type, quantity_changed, previous_quantity, new_quantity, created_at
-
-Suppliers
-id, name, contact_info, created_at, updated_at
-
-Shipping / Addresses
-id, user_id, address_line1, address_line2, city, state, zip_code, country, phone_number, created_at, updated_at
-
-Audit_Log
-id, user_id, action_type, table_name, record_id, old_values, new_values, created_at
+![class-uml.png](class-uml.png)
 
 
 2. Categories
@@ -89,12 +64,6 @@ POST /cart/:cartId/items → add item to cart
 PUT /cart/:cartId/items/:itemId → update item quantity
 DELETE /cart/:cartId/items/:itemId → remove item
 
-8. Wishlist
-POST /wishlist → create wishlist
-GET /wishlist/:userId → get user’s wishlist
-POST /wishlist/:wishlistId/items → add item
-DELETE /wishlist/:wishlistId/items/:itemId → remove item
-
 9. Discounts
 POST /discounts → create discount/coupon
 GET /discounts → list all discounts
@@ -105,7 +74,6 @@ POST /orders/:orderId/apply-discount → apply discount to order
 
 10. Advanced / Optional
 GET /inventory-history/:productId → see stock changes
-GET /suppliers → list suppliers
 GET /addresses/:userId → get user addresses
 POST /addresses → add address
 PUT /addresses/:id → update address
@@ -131,7 +99,6 @@ GET /products?sort=rating_desc
 4. Advanced / Optional Filters
 GET /products?categoryIds=1,2,5
 GET /products?onSale=true
-GET /products?supplierId=3
 GET /products?categoryId=2&minPrice=20&maxPrice=200&inStock=true&sort=rating_desc
 
 5. Pagination

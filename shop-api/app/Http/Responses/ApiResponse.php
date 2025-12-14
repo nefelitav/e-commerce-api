@@ -1,0 +1,17 @@
+<?php
+
+namespace App\Http\Responses;
+
+use Illuminate\Http\JsonResponse;
+use Response;
+
+trait ApiResponse
+{
+    protected static function success(Response $data, int $status = 200): JsonResponse
+    {
+        return response()->json([
+            'success' => true,
+            'data' => $data->toArray(),
+        ], $status);
+    }
+}
