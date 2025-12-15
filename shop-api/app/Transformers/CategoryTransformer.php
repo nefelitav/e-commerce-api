@@ -6,6 +6,9 @@ use App\Dto\Category\Category;
 
 final readonly class CategoryTransformer
 {
+    /**
+     * @return array<string, mixed>
+     */
     public function transform(Category $category): array
     {
         return [

@@ -10,7 +10,8 @@ trait CreatedAtUtcTrait
     /**
      * Override the created_at attribute to always return UTC.
      *
-     * @return \Illuminate\Support\Carbon|null
+     * @param mixed $value
+     * @return Carbon|null
      */
     public function getCreatedAtAttribute(mixed $value): ?Carbon
     {

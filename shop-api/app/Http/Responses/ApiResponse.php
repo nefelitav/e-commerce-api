@@ -2,17 +2,17 @@
 
 namespace App\Http\Responses;
 
+use App\Http\Responses\Category\ArrayableResponse;
 use Illuminate\Http\JsonResponse;
-use Response;
 
 trait ApiResponse
 {
-    protected static function success($data, int $status = 200): JsonResponse
+    protected static function success(ArrayableResponse $data, int $status = 200): JsonResponse
     {
-        $arrayData = is_object($data) && method_exists($data, 'toArray') ? $data->toArray() : $data;
+        $arrayData = $data->toArray();
 
         return response()->json(
-            array_merge(['success' => true,], $arrayData),
+            array_merge(['success' => true], $arrayData),
             $status
         );
     }

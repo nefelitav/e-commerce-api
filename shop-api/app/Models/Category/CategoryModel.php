@@ -4,6 +4,7 @@ namespace App\Models\Category;
 
 use App\Models\CreatedAtUtcTrait;
 use App\Models\UpdatedAtUtcTrait;
+use Database\Factories\Category\CategoryModelFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -15,13 +16,13 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string|null $description
  * @property int|null $parent_id
  * @property CategoryModel $parent
- * @method static static create(array $attributes = [])
+ * @method static static create(array<mixed> $attributes = [])
  */
 class CategoryModel extends Model
 {
     use CreatedAtUtcTrait;
     use UpdatedAtUtcTrait;
-    /** @use HasFactory<\Database\Factories\Category\CategoryModelFactory> */
+    /** @use HasFactory<CategoryModelFactory> */
     use HasFactory;
 
     protected $table = 'categories';
@@ -32,11 +33,17 @@ class CategoryModel extends Model
         'parent_id',
     ];
 
+    /**
+     * @phpstan-ignore-next-line
+     */
     public function parent(): BelongsTo
     {
         return $this->belongsTo(self::class, 'parent_id');
     }
 
+    /**
+     * @phpstan-ignore-next-line
+     */
     public function children(): HasMany
     {
         return $this->hasMany(self::class, 'parent_id');

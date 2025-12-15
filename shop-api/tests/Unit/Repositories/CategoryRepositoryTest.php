@@ -30,7 +30,7 @@ class CategoryRepositoryTest extends TestCase
 
         $this->assertCount(3, $categories);
         $this->assertEquals(
-            CategoryModel::first()->name,
+            CategoryModel::query()->first()->name,
             $categories[0]->name
         );
     }

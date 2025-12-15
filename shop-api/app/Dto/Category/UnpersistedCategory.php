@@ -10,6 +10,9 @@ final readonly class UnpersistedCategory
         public ?int    $parentId,
     ) {}
 
+    /**
+     * @return array<string, mixed>
+     */
     public function toArray(): array
     {
         return [
@@ -19,6 +22,9 @@ final readonly class UnpersistedCategory
         ];
     }
 
+    /**
+     * @param array<string, mixed> $data
+     */
     public static function fromArray(array $data): self
     {
         return new self(

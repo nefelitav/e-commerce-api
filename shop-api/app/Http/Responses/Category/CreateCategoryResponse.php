@@ -2,9 +2,7 @@
 
 namespace App\Http\Responses\Category;
 
-use Response;
-
-final class CreateCategoryResponse extends Response
+final class CreateCategoryResponse implements ArrayableResponse
 {
     /**
      * @param array<string, mixed> $category
@@ -13,6 +11,9 @@ final class CreateCategoryResponse extends Response
         private readonly array $category
     ) {}
 
+    /**
+     * @return  array<string, mixed>
+     */
     public function toArray(): array
     {
         return [

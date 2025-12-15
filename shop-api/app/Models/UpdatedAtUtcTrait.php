@@ -9,7 +9,8 @@ trait UpdatedAtUtcTrait
     /**
      * Override the updated_at attribute to always return UTC.
      *
-     * @return \Illuminate\Support\Carbon|null
+     * @param mixed $value
+     * @return Carbon|null
      */
     public function getUpdatedAtAttribute(mixed $value): ?Carbon
     {

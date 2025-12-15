@@ -6,7 +6,7 @@ use App\Transformers\CategoryTransformer;
 use App\Dto\Category\Category;
 use Response;
 
-final class ListSubcategoriesResponse extends Response
+final class ListSubcategoriesResponse implements ArrayableResponse
 {
     /**
      * @param array<int, array<string, mixed>> $categories
@@ -15,6 +15,9 @@ final class ListSubcategoriesResponse extends Response
         private readonly array $categories,
     ) {}
 
+    /**
+     * @return  array<string, mixed>
+     */
     public function toArray(): array
     {
         return [

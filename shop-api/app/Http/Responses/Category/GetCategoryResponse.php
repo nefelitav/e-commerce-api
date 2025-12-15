@@ -4,7 +4,7 @@ namespace App\Http\Responses\Category;
 
 use Symfony\Component\HttpFoundation\Response;
 
-final class GetCategoryResponse extends Response
+final class GetCategoryResponse implements ArrayableResponse
 {
     /**
      * @param array<string, mixed> $category
@@ -12,9 +12,11 @@ final class GetCategoryResponse extends Response
     public function __construct(
         private readonly array $category
     ) {
-        parent::__construct();
     }
 
+    /**
+     * @return  array<string, mixed>
+     */
     public function toArray(): array
     {
         return [

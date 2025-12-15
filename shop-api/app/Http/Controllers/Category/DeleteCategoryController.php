@@ -9,7 +9,6 @@ use App\Http\Requests\Category\DeleteCategoryRequest;
 use App\Http\Responses\ApiResponse;
 use App\Http\Responses\Category\DeleteCategoryResponse;
 use App\Services\Category\CategoryService;
-use App\Transformers\CategoryTransformer;
 use Illuminate\Http\JsonResponse;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Log\Logger;
@@ -20,7 +19,6 @@ final readonly class DeleteCategoryController extends Controller
 
     public function __construct(
         private CategoryService $service,
-        private CategoryTransformer $transformer,
         private Logger $logger,
     ) {
     }

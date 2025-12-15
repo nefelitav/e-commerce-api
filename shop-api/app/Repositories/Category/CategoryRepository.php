@@ -30,7 +30,12 @@ class CategoryRepository
             return [];
         }
 
-        return $category->children()->get()->map(fn($child) => Category::fromModel($child))->all();
+        /** @var \Illuminate\Database\Eloquent\Collection<int, CategoryModel> $children */
+        $children = $category->children()->get();
+
+        return $children
+            ->map(fn(CategoryModel $child) => Category::fromModel($child))
+            ->all();
     }
 
 

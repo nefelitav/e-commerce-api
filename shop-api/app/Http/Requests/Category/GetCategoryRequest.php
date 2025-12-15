@@ -11,11 +11,17 @@ final class GetCategoryRequest extends FormRequest
         return true;
     }
 
-    public function validationData(): ?array
+    /**
+     * @return array<string, mixed>
+     */
+    public function validationData(): array
     {
         return array_merge($this->request->all(), $this->route()->parameters());
     }
 
+    /**
+     * @return array<string, mixed>
+     */
     public function rules(): array
     {
         return [

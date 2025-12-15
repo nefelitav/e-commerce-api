@@ -10,13 +10,13 @@ use App\Models\Category\CategoryModel;
 use App\Repositories\Category\CategoryRepository;
 use App\Services\Category\CategoryService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Mockery;
 use Tests\TestCase;
 
 class CategoryServiceTest extends TestCase
 {
     use RefreshDatabase;
 
+    /** @var CategoryRepository&\PHPUnit\Framework\MockObject\MockObject $repository */
     private CategoryRepository $repository;
     private CategoryService $service;
 
@@ -24,21 +24,22 @@ class CategoryServiceTest extends TestCase
     {
         parent::setUp();
 
-        $this->repository = Mockery::mock(CategoryRepository::class);
+        $this->repository = $this->createMock(CategoryRepository::class);
         $this->service = new CategoryService($this->repository);
     }
 
     protected function tearDown(): void
     {
-        Mockery::close();
-
         parent::tearDown();
     }
 
     public function test_listCategories_returns_array_of_categories(): void
     {
         $categories = [CategoryModel::factory()->create()];
-        $this->repository->shouldReceive('getAll')->once()->andReturn($categories);
+        $this->repository
+            ->expects($this->once())
+            ->method('getAll')
+            ->willReturn($categories);
 
         $result = $this->service->listCategories();
 
@@ -49,24 +50,45 @@ class CategoryServiceTest extends TestCase
     {
         $parentId = 1;
         $subcategories = [CategoryModel::factory()->create()];
-        $this->repository->shouldReceive('getSubcategoriesById')->with($parentId)->once()->andReturn($subcategories);
+        $this->repository
+            ->expects($this->once())
+            ->method('getSubcategoriesById')
+            ->with($parentId)
+            ->willReturn($subcategories);
 
         $result = $this->service->listSubcategories($parentId);
 
         $this->assertSame($subcategories, $result);
     }
 
-    public function test_getCategoryById_returns_category_or_null(): void
+    public function test_getCategoryById_returns_category(): void
     {
         $id = 1;
         $category = Category::fromModel(CategoryModel::factory()->create());
 
-        $this->repository->shouldReceive('findById')->with($id)->once()->andReturn($category);
-        $result = $this->service->getCategoryById($id);
-        $this->assertSame($category, $result);
+        $this->repository
+            ->expects($this->once())
+            ->method('findById')
+            ->with($id)
+            ->willReturn($category);
 
-        $this->repository->shouldReceive('findById')->with($id)->once()->andReturn(null);
         $result = $this->service->getCategoryById($id);
+
+        $this->assertSame($category, $result);
+    }
+
+    public function test_getCategoryById_returns_null(): void
+    {
+        $id = 1;
+
+        $this->repository
+            ->expects($this->once())
+            ->method('findById')
+            ->with($id)
+            ->willReturn(null);
+
+        $result = $this->service->getCategoryById($id);
+
         $this->assertNull($result);
     }
 
@@ -80,10 +102,11 @@ class CategoryServiceTest extends TestCase
 
         $existingCategory = CategoryModel::factory()->create();
 
-        $this->repository->shouldReceive('findByName')
+        $this->repository
+            ->expects($this->once())
+            ->method('findByName')
             ->with('ExistingCategory')
-            ->once()
-            ->andReturn(Category::fromModel($existingCategory));
+            ->willReturn(Category::fromModel($existingCategory));
 
         $this->expectException(CategoryAlreadyExistsException::class);
 
@@ -100,12 +123,17 @@ class CategoryServiceTest extends TestCase
 
         $persistedCategory = Category::fromModel(CategoryModel::factory()->create());
 
-        $this->repository->shouldReceive('findByName')
+        $this->repository
+            ->expects($this->once())
+            ->method('findByName')
             ->with('NewCategory')
-            ->andReturn(null);
-        $this->repository->shouldReceive('persist')
+            ->willReturn(null);
+
+        $this->repository
+            ->expects($this->once())
+            ->method('persist')
             ->with($unpersisted)
-            ->andReturn($persistedCategory);
+            ->willReturn($persistedCategory);
 
         $result = $this->service->createCategory($unpersisted);
 
@@ -122,10 +150,11 @@ class CategoryServiceTest extends TestCase
         );
         $updatedCategory = Category::fromModel(CategoryModel::factory()->create());
 
-        $this->repository->shouldReceive('update')
+        $this->repository
+            ->expects($this->once())
+            ->method('update')
             ->with($id, $unpersisted)
-            ->once()
-            ->andReturn($updatedCategory);
+            ->willReturn($updatedCategory);
 
         $result = $this->service->updateCategory($id, $unpersisted);
 
@@ -142,10 +171,11 @@ class CategoryServiceTest extends TestCase
             parentId: null
         );
 
-        $this->repository->shouldReceive('update')
+        $this->repository
+            ->expects($this->once())
+            ->method('update')
             ->with($id, $unpersisted)
-            ->once()
-            ->andThrow(new CategoryNotFoundException($id));
+            ->willThrowException(new CategoryNotFoundException($id));
 
         $this->expectException(CategoryNotFoundException::class);
 
@@ -156,10 +186,11 @@ class CategoryServiceTest extends TestCase
     {
         $id = 1;
 
-        $this->repository->shouldReceive('delete')
+        $this->repository
+            ->expects($this->once())
+            ->method('delete')
             ->with($id)
-            ->once()
-            ->andReturnTrue();
+            ->willReturn(true);
 
         $result = $this->service->deleteCategory($id);
 
@@ -170,9 +201,11 @@ class CategoryServiceTest extends TestCase
     {
         $id = 1;
 
-        $this->repository->shouldReceive('delete')
+        $this->repository
+            ->expects($this->once())
+            ->method('delete')
             ->with($id)
-            ->andThrow(new CategoryNotFoundException($id));
+            ->willThrowException(new CategoryNotFoundException($id));
 
         $this->expectException(CategoryNotFoundException::class);
 
