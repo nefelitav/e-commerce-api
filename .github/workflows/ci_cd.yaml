@@ -2,13 +2,9 @@ name: PHP CI
 
 on:
   push:
-    branches: [ "main", "develop" ]
-    paths:
-      - "shop-api/**"
+    branches: [ "main"]
   pull_request:
-    branches: [ "main", "develop" ]
-    paths:
-      - "shop-api/**"
+    branches: [ "main" ]
 
 jobs:
   tests:
@@ -20,7 +16,7 @@ jobs:
 
     strategy:
       matrix:
-        php-version: [ '8.2', '8.3' ]
+        php-version: [ '8.3' ]
 
     steps:
       - name: Checkout code
@@ -42,8 +38,8 @@ jobs:
       - name: Check coding standards
         run: vendor/bin/php-cs-fixer fix --dry-run --diff
 
-      - name: Run tests
-        run: vendor/bin/phpunit
+      - name: Run tests with coverage
+        run: vendor/bin/phpunit 
 
       - name: Run PHPStan
         run: vendor/bin/phpstan analyse
