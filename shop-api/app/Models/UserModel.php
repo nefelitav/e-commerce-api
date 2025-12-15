@@ -2,14 +2,13 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
 class UserModel extends Authenticatable
 {
-    /** @use HasFactory<\Database\Factories\UserFactory> */
+    /** @use HasFactory<\Database\Factories\UserModelFactory> */
     use HasFactory, Notifiable;
 
     /**
@@ -21,7 +20,16 @@ class UserModel extends Authenticatable
         'name',
         'email',
         'password',
+        'role',
+        'address_line1',
+        'city',
+        'state',
+        'zip_code',
+        'country',
+        'phone_number',
     ];
+
+    protected $table = 'users';
 
     /**
      * The attributes that should be hidden for serialization.

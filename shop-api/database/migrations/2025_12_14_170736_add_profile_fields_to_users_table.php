@@ -14,7 +14,6 @@ return new class extends Migration
         Schema::table('users', function (Blueprint $table) {
             $table->enum('role', ['user', 'admin'])->default('user')->index();
             $table->string('address_line1')->nullable();
-            $table->string('address_line2')->nullable();
             $table->string('city')->nullable();
             $table->string('state')->nullable();
             $table->string('zip_code')->nullable();
@@ -33,7 +32,6 @@ return new class extends Migration
             $table->dropColumn([
                 'role',
                 'address_line1',
-                'address_line2',
                 'city',
                 'state',
                 'zip_code',

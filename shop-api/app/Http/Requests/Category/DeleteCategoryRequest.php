@@ -11,10 +11,15 @@ final class DeleteCategoryRequest extends FormRequest
         return true;
     }
 
+    public function validationData(): ?array
+    {
+        return array_merge($this->request->all(), $this->route()->parameters());
+    }
+
     public function rules(): array
     {
         return [
-            'id' => 'exists:categories,id',
+            'id' => ['required', 'exists:categories,id'],
         ];
     }
 }

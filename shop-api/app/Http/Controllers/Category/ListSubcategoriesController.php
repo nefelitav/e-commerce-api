@@ -51,6 +51,6 @@ final readonly class ListSubcategoriesController extends Controller
         }
         $this->logger->info("Subcategories found.", ["subcategories" => $subCategoriesArray]);
 
-        return new ListSubcategoriesResponse($this->transformer, $subCategoriesArray);
+        return new ListSubcategoriesResponse($subCategoriesArray);
     }
 }

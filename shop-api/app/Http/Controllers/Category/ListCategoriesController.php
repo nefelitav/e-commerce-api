@@ -46,6 +46,6 @@ final readonly class ListCategoriesController extends Controller
         }
         $this->logger->info("Categories found.", ["categories" => $categoriesArray]);
 
-        return new ListCategoriesResponse($this->transformer, $categoriesArray);
+        return new ListCategoriesResponse($categoriesArray);
     }
 }

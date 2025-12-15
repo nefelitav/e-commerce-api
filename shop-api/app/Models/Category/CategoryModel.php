@@ -4,6 +4,7 @@ namespace App\Models\Category;
 
 use App\Models\CreatedAtUtcTrait;
 use App\Models\UpdatedAtUtcTrait;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -20,6 +21,8 @@ class CategoryModel extends Model
 {
     use CreatedAtUtcTrait;
     use UpdatedAtUtcTrait;
+    /** @use HasFactory<\Database\Factories\Category\CategoryModelFactory> */
+    use HasFactory;
 
     protected $table = 'categories';
 

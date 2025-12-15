@@ -48,6 +48,6 @@ final readonly class CreateCategoryController extends Controller
         $createdCategoryData = $this->transformer->transform($createdCategory);
         $this->logger->info("New category created.", ["category" => $createdCategoryData]);
 
-        return new CreateCategoryResponse($this->transformer, $createdCategory);
+        return new CreateCategoryResponse($createdCategoryData);
     }
 }

@@ -8,9 +8,11 @@ use App\Http\Controllers\Category\ListSubcategoriesController;
 use App\Http\Controllers\Category\UpdateCategoryController;
 use Illuminate\Support\Facades\Route;
 
-Route::apiResource('list categories', ListCategoriesController::class);
-Route::apiResource('list subcategories', ListSubcategoriesController::class);
-Route::apiResource('get category', GetCategoryController::class);
-Route::apiResource('create category', CreateCategoryController::class);
-Route::apiResource('update category', UpdateCategoryController::class);
-Route::apiResource('delete category', DeleteCategoryController::class);
+Route::prefix('api')->group(function () {
+    Route::get('categories', [ListCategoriesController::class, 'index'])->name('categories.index');
+    Route::get('categories/{id}', [GetCategoryController::class, 'show'])->name('categories.show');
+    Route::post('categories', [CreateCategoryController::class, 'store'])->name('categories.store');
+    Route::put('categories/{id}', [UpdateCategoryController::class, 'update'])->name('categories.update');
+    Route::delete('categories/{id}', [DeleteCategoryController::class, 'destroy'])->name('categories.destroy');
+    Route::get('categories/{id}/subcategories', [ListSubcategoriesController::class, 'index'])->name('categories.subcategories');
+});

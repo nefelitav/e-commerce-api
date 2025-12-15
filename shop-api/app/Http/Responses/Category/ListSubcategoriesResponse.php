@@ -9,20 +9,16 @@ use Response;
 final class ListSubcategoriesResponse extends Response
 {
     /**
-     * @param array<Category> $categories
+     * @param array<int, array<string, mixed>> $categories
      */
     public function __construct(
-        private readonly CategoryTransformer $transformer,
         private readonly array $categories,
     ) {}
 
     public function toArray(): array
     {
         return [
-            'data' => array_map(
-                fn(Category $category) => $this->transformer->transform($category),
-                $this->categories
-            ),
+            'data' => $this->categories,
             'message' => 'Subcategories found',
         ];
     }

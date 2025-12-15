@@ -45,9 +45,9 @@ final readonly class UpdateCategoryController extends Controller
             throw BadRequestException::fromException($e);
         }
 
-        $createdCategoryData = $this->transformer->transform($updatedCategory);
-        $this->logger->info("Category updated successfully.", ["category" => $createdCategoryData]);
+        $updatedCategoryData = $this->transformer->transform($updatedCategory);
+        $this->logger->info("Category updated successfully.", ["category" => $updatedCategoryData]);
 
-        return new UpdateCategoryResponse($this->transformer, $updatedCategory);
+        return new UpdateCategoryResponse($updatedCategoryData);
     }
 }

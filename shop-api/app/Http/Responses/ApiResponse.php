@@ -7,12 +7,14 @@ use Response;
 
 trait ApiResponse
 {
-    protected static function success(Response $data, int $status = 200): JsonResponse
+    protected static function success($data, int $status = 200): JsonResponse
     {
-        return response()->json([
-            'success' => true,
-            'data' => $data->toArray(),
-        ], $status);
+        $arrayData = is_object($data) && method_exists($data, 'toArray') ? $data->toArray() : $data;
+
+        return response()->json(
+            array_merge(['success' => true,], $arrayData),
+            $status
+        );
     }
 
     protected function error(string $message = 'Error', int $status = 400,): JsonResponse

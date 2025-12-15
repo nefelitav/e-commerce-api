@@ -2,21 +2,21 @@
 
 namespace App\Http\Responses\Category;
 
-use App\Transformers\CategoryTransformer;
-use App\Dto\Category\Category;
 use Response;
 
 final class UpdateCategoryResponse extends Response
 {
+    /**
+     * @param array<string, mixed> $category
+     */
     public function __construct(
-        private readonly CategoryTransformer $transformer,
-        private readonly Category $category
+        private readonly array $category
     ) {}
 
     public function toArray(): array
     {
         return [
-            'data' => $this->transformer->transform($this->category),
+            'data' => $this->category,
             'message' => 'Category updated successfully',
         ];
     }

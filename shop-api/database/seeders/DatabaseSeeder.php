@@ -20,6 +20,13 @@ class DatabaseSeeder extends Seeder
         UserModel::factory()->create([
             'name' => 'Test User',
             'email' => 'test@example.com',
+            'role' => 'admin',
+            'address_line1' => 'Test Address',
+            'city' => 'Test City',
+            'state' => 'Test State',
+            'zip_code' => 'Test Zip Code',
+            'country' => 'Test Country',
+            'phone_number' => 'Test Phone',
         ]);
     }
 }

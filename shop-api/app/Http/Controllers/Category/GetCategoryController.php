@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Category;
 
 use App\Exceptions\BadRequestException;
-use App\Exceptions\CategoryNotFoundException;
 use App\Exceptions\UnprocessableEntityException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Category\GetCategoryRequest;
@@ -52,6 +51,6 @@ final readonly class GetCategoryController extends Controller
         $foundCategory = $this->transformer->transform($category);
         $this->logger->info("Category found.", ["category" => $foundCategory]);
 
-        return new GetCategoryResponse($this->transformer, $category);
+        return new GetCategoryResponse($foundCategory);
     }
 }
