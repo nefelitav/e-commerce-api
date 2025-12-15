@@ -11,10 +11,15 @@ final class UpdateCategoryRequest extends FormRequest
         return true;
     }
 
+    public function validationData(): ?array
+    {
+        return array_merge($this->request->all(), $this->route()->parameters());
+    }
+
     public function rules(): array
     {
         return [
-            'id' => 'exists:categories,id',
+            'id' => ['required', 'exists:categories,id'],
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
             'parent_id' => 'nullable|exists:categories,id',

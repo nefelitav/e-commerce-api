@@ -15,7 +15,7 @@ final readonly class UnpersistedCategory
         return [
             'name' => $this->name,
             'description' => $this->description,
-            'parentId' => $this->parentId,
+            'parent_id' => $this->parentId,
         ];
     }
 
@@ -24,7 +24,7 @@ final readonly class UnpersistedCategory
         return new self(
             $data['name'],
             $data['description'],
-            $data['parentId'],
+            $data['parent_id'],
         );
     }
 }
