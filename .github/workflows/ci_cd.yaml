@@ -1,0 +1,55 @@
+name: PHP CI
+
+on:
+  push:
+    branches: [ "main", "develop" ]
+    paths:
+      - "shop-api/**"
+  pull_request:
+    branches: [ "main", "develop" ]
+    paths:
+      - "shop-api/**"
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: shop-api
+
+    strategy:
+      matrix:
+        php-version: [ '8.2', '8.3' ]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php-version }}
+          extensions: mbstring, pdo, pdo_mysql
+          coverage: none
+
+      - name: Validate composer.json
+        run: composer validate --strict
+
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-progress --no-interaction
+
+      - name: Check coding standards
+        run: vendor/bin/php-cs-fixer fix --dry-run --diff
+
+      - name: Run tests
+        run: vendor/bin/phpunit
+
+      - name: Run PHPStan
+        run: vendor/bin/phpstan analyse
+
+      - name: Cache Composer packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.composer/cache
+          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
