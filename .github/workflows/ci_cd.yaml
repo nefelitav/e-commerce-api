@@ -10,10 +10,6 @@ jobs:
   tests:
     runs-on: ubuntu-latest
 
-    defaults:
-      run:
-        working-directory: shop-api
-
     strategy:
       matrix:
         php-version: [ '8.3' ]
@@ -39,7 +35,7 @@ jobs:
         run: vendor/bin/php-cs-fixer fix --dry-run --diff
 
       - name: Run tests with coverage
-        run: vendor/bin/phpunit 
+        run: vendor/bin/phpunit
 
       - name: Run PHPStan
         run: vendor/bin/phpstan analyse
@@ -49,3 +45,37 @@ jobs:
         with:
           path: ~/.composer/cache
           key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+
+      - name: Set up Docker Compose
+        run: sudo apt-get update && sudo apt-get install -y docker-compose
+
+      - name: Start docker-compose in detached mode
+        run: docker compose up -d
+
+      - name: Wait for services to be healthy
+        run: |
+          for i in $(seq 1 120); do
+            TOTAL_CONTAINERS=$(docker compose config --services | wc -l)
+            HEALTHY_CONTAINERS=0
+
+            for container in $(docker compose ps -q); do
+              status=$(docker inspect --format='{{.State.Health.Status}}' $container 2>/dev/null || echo "no_healthcheck")
+              if [ "$status" = "healthy" ]; then
+                HEALTHY_CONTAINERS=$((HEALTHY_CONTAINERS + 1))
+              fi
+            done
+
+            echo "Healthy containers: $HEALTHY_CONTAINERS / $TOTAL_CONTAINERS"
+
+            if [ "$HEALTHY_CONTAINERS" -eq "$TOTAL_CONTAINERS" ] && [ "$TOTAL_CONTAINERS" -gt 0 ]; then
+              echo "All containers are healthy!"
+              exit 0
+            fi
+
+            sleep 1
+          done
+
+          echo "Timed out waiting for containers to be healthy"
+          docker ps
+          exit 1
+

@@ -1,84 +1,59 @@
-# shop-api
+<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
 
-```mermaid
-classDiagram
-    User "1" --> "0..*" Order : places
-    User "1" --> "1" Cart : owns
-    Order "1" --> "1..*" OrderItem : contains
-    Product "1" --> "0..*" OrderItem : appears_in
-    Cart "1" --> "0..*" CartItem : contains
-    Product "1" --> "0..*" CartItem : appears_in
-    Product "1" --> "0..*" InventoryHistory : tracks
-    Category "1" --> "0..*" Product : contains
-    Category "0..1" --> "0..*" Category : parent
-    InventoryHistory "*" --> "1" Product : belongs_to
-```
+<p align="center">
+<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
+<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
+<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
+<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
+</p>
 
-2. Categories
-POST /categories → create a category
-GET /categories → list all categories
-GET /categories/:id → get category details
-PUT /categories/:id → update category
-DELETE /categories/:id → delete category
+## About Laravel
 
-3. Products
-POST /products → create a product
-GET /products → list all products (with filters & pagination)
-GET /products/:id → get product details
-PUT /products/:id → update product
-DELETE /products/:id → delete product
-GET /products/search?q= → search products by name/description
-GET /products/top-selling → list top-selling products
-GET /products/category/:categoryId → products in a category
+Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
 
-4. Orders
-POST /orders → create an order
-GET /orders → list all orders (admin)
-GET /orders/:id → get order details (including items)
-PUT /orders/:id → update order status
-DELETE /orders/:id → cancel/delete order
-GET /orders/user/:userId → list orders for a user
+- [Simple, fast routing engine](https://laravel.com/docs/routing).
+- [Powerful dependency injection container](https://laravel.com/docs/container).
+- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
+- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
+- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
+- [Robust background job processing](https://laravel.com/docs/queues).
+- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
 
-5. Order Items
-POST /orders/:orderId/items → add product to order
-PUT /orders/:orderId/items/:itemId → update quantity
-DELETE /orders/:orderId/items/:itemId → remove item
+Laravel is accessible, powerful, and provides tools required for large, robust applications.
 
-7. Cart
-POST /cart → create a cart (usually auto-created for user)
-GET /cart/:userId → get user’s cart
-POST /cart/:cartId/items → add item to cart
-PUT /cart/:cartId/items/:itemId → update item quantity
-DELETE /cart/:cartId/items/:itemId → remove item
+## Learning Laravel
 
-10. Advanced / Optional
-GET /inventory-history/:productId → see stock changes
-GET /addresses/:userId → get user addresses
-POST /addresses → add address
-PUT /addresses/:id → update address
-DELETE /addresses/:id → remove address
-GET /audit-log → list all audit actions (admin only)
+Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
 
+If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
 
-1. Basic Filters
-GET /products?categoryId=1
-GET /products?minPrice=10&maxPrice=100
-GET /products?inStock=true
-GET /products?minRating=4
+## Laravel Sponsors
 
-2. Text Search
-GET /products?search=phone
+We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
 
-3. Sorting
-GET /products?sort=price_asc or sort=price_desc
-GET /products?sort=newest
-GET /products?sort=top_selling
-GET /products?sort=rating_desc
+### Premium Partners
 
-4. Advanced / Optional Filters
-GET /products?categoryIds=1,2,5
-GET /products?onSale=true
-GET /products?categoryId=2&minPrice=20&maxPrice=200&inStock=true&sort=rating_desc
+- **[Vehikl](https://vehikl.com)**
+- **[Tighten Co.](https://tighten.co)**
+- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
+- **[64 Robots](https://64robots.com)**
+- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
+- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
+- **[Redberry](https://redberry.international/laravel-development)**
+- **[Active Logic](https://activelogic.com)**
 
-5. Pagination
-GET /products?page=2&limit=20
+## Contributing
+
+Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+
+## Code of Conduct
+
+In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+
+## Security Vulnerabilities
+
+If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+
+## License
+
+The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
