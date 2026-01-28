@@ -17,6 +17,11 @@ use App\Http\Controllers\Order\DeleteOrderController;
 use App\Http\Controllers\Order\GetOrderController;
 use App\Http\Controllers\Order\ListOrdersController;
 use App\Http\Controllers\Order\UpdateOrderController;
+use App\Http\Controllers\Cart\CreateCartController;
+use App\Http\Controllers\Cart\DeleteCartController;
+use App\Http\Controllers\Cart\GetCartController;
+use App\Http\Controllers\Cart\ListCartsController;
+use App\Http\Controllers\Cart\UpdateCartController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('api')->group(function () {
@@ -39,4 +44,10 @@ Route::prefix('api')->group(function () {
     Route::post('orders', [CreateOrderController::class, 'store'])->name('orders.store');
     Route::put('orders/{id}', [UpdateOrderController::class, 'update'])->name('orders.update');
     Route::delete('orders/{id}', [DeleteOrderController::class, 'destroy'])->name('orders.destroy');
+
+    Route::get('carts', [ListCartsController::class, 'index'])->name('carts.index');
+    Route::get('carts/{id}', [GetCartController::class, 'show'])->name('carts.show');
+    Route::post('carts', [CreateCartController::class, 'store'])->name('carts.store');
+    Route::put('carts/{id}', [UpdateCartController::class, 'update'])->name('carts.update');
+    Route::delete('carts/{id}', [DeleteCartController::class, 'destroy'])->name('carts.destroy');
 });
