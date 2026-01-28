@@ -42,7 +42,7 @@ final readonly class UpdateCategoryController extends Controller
 
             $updatedCategory = $this->service->updateCategory($validatedData['id'], $unpersistedCategory);
         } catch (CategoryNotFoundException $e) {
-            throw BadRequestException::fromException($e);
+            throw new BadRequestException($e);
         }
 
         $updatedCategoryData = $this->transformer->transform($updatedCategory);

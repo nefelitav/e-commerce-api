@@ -1,17 +1,17 @@
 <?php
 
-namespace App\Http\Responses\Category;
+namespace App\Http\Responses\Product;
 
 use App\Http\Responses\ArrayableResponse;
 use Symfony\Component\HttpFoundation\Response;
 
-final class GetCategoryResponse implements ArrayableResponse
+final readonly class GetProductResponse implements ArrayableResponse
 {
     /**
-     * @param array<string, mixed> $category
+     * @param array<string, mixed> $product
      */
     public function __construct(
-        private readonly array $category
+        private array $product
     ) {
     }
 
@@ -21,8 +21,8 @@ final class GetCategoryResponse implements ArrayableResponse
     public function toArray(): array
     {
         return [
-            'data' => $this->category,
-            'message' => 'Category found',
+            'data' => $this->product,
+            'message' => 'Product found',
         ];
     }
 }

@@ -48,15 +48,15 @@ class CategoryServiceTest extends TestCase
 
     public function test_listSubcategories_returns_array_of_categories(): void
     {
-        $parentId = 1;
+        $parent_id = 1;
         $subcategories = [CategoryModel::factory()->create()];
         $this->repository
             ->expects($this->once())
             ->method('getSubcategoriesById')
-            ->with($parentId)
+            ->with($parent_id)
             ->willReturn($subcategories);
 
-        $result = $this->service->listSubcategories($parentId);
+        $result = $this->service->listSubcategories($parent_id);
 
         $this->assertSame($subcategories, $result);
     }

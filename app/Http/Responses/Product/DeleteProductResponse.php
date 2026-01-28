@@ -1,10 +1,10 @@
 <?php
 
-namespace App\Http\Responses\Category;
+namespace App\Http\Responses\Product;
 
 use App\Http\Responses\ArrayableResponse;
 
-final class DeleteCategoryResponse implements ArrayableResponse
+final class DeleteProductResponse implements ArrayableResponse
 {
     /**
      * @return  array<string, string>
@@ -12,7 +12,7 @@ final class DeleteCategoryResponse implements ArrayableResponse
     public function toArray(): array
     {
         return [
-            'message' => 'Category deleted successfully',
+            'message' => 'Product deleted successfully',
         ];
     }
 }

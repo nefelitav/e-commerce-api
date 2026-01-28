@@ -7,7 +7,7 @@ use App\Models\Category\CategoryModel;
 final readonly class Category
 {
     public function __construct(
-        public ?int    $id,
+        public int     $id,
         public string  $name,
         public ?string $description,
         public ?int    $parentId,
@@ -22,5 +22,4 @@ final readonly class Category
             $category->parent_id,
         );
     }
-
 }

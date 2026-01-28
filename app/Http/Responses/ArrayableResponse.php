@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Responses\Category;
+namespace App\Http\Responses;
 
 interface ArrayableResponse
 {

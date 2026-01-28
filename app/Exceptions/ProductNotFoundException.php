@@ -5,12 +5,12 @@ namespace App\Exceptions;
 use Exception;
 use Symfony\Component\HttpFoundation\Response;
 
-class CategoryNotFoundException extends Exception
+class ProductNotFoundException extends Exception
 {
     public function __construct(int $id)
     {
         parent::__construct(
-            "Category with id {$id} not found.",
+            "Product with id {$id} not found.",
             Response::HTTP_NOT_FOUND,
         );
     }

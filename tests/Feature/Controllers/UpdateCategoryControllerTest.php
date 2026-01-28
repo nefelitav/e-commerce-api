@@ -20,6 +20,7 @@ class UpdateCategoryControllerTest extends TestCase
         ]);
 
         $payload = [
+            'id' => $category->id,
             'name' => 'Updated Category Name',
             'description' => 'New Category Description',
             'parent_id' => null,
@@ -53,6 +54,7 @@ class UpdateCategoryControllerTest extends TestCase
         ]);
 
         $payload = [
+            'id' => $childCategory->id,
             'name' => 'Updated Child Category',
             'parent_id' => $parentCategory->id,
             'description' => 'New Category Description',

@@ -41,7 +41,7 @@ final readonly class GetCategoryController extends Controller
 
             $category = $this->service->getCategoryById($validatedData['id']);
         } catch (Exception $e) {
-            throw UnprocessableEntityException::fromException($e);
+            throw new UnprocessableEntityException($e);
         }
 
         if ($category === null) {

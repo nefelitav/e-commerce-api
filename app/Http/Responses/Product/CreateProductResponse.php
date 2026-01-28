@@ -1,19 +1,17 @@
 <?php
 
-namespace App\Http\Responses\Category;
+namespace App\Http\Responses\Product;
 
 use App\Http\Responses\ArrayableResponse;
-use Symfony\Component\HttpFoundation\Response;
 
-final class GetCategoryResponse implements ArrayableResponse
+final readonly class CreateProductResponse implements ArrayableResponse
 {
     /**
      * @param array<string, mixed> $category
      */
     public function __construct(
-        private readonly array $category
-    ) {
-    }
+        private array $category
+    ) {}
 
     /**
      * @return  array<string, mixed>
@@ -22,7 +20,7 @@ final class GetCategoryResponse implements ArrayableResponse
     {
         return [
             'data' => $this->category,
-            'message' => 'Category found',
+            'message' => 'Product updated successfully',
         ];
     }
 }

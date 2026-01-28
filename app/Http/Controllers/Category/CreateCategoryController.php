@@ -42,7 +42,7 @@ final readonly class CreateCategoryController extends Controller
 
             $createdCategory = $this->service->createCategory($unpersistedCategory);
         } catch (CategoryAlreadyExistsException $e) {
-            throw BadRequestException::fromException($e);
+            throw new BadRequestException($e->getMessage(), $e);
         }
 
         $createdCategoryData = $this->transformer->transform($createdCategory);

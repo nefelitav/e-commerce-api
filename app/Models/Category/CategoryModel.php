@@ -3,12 +3,14 @@
 namespace App\Models\Category;
 
 use App\Models\CreatedAtUtcTrait;
+use App\Models\Product\ProductModel;
 use App\Models\UpdatedAtUtcTrait;
 use Database\Factories\Category\CategoryModelFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Collection;
 
 /**
  * @property int $id
@@ -17,6 +19,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property int|null $parent_id
  * @property CategoryModel $parent
  * @method static static create(array<mixed> $attributes = [])
+ * @property Collection<int, ProductModel> $products
+ * @property Collection<int, CategoryModel> $children
  */
 class CategoryModel extends Model
 {
@@ -34,7 +38,7 @@ class CategoryModel extends Model
     ];
 
     /**
-     * @phpstan-ignore-next-line
+     * @return BelongsTo<CategoryModel, $this>
      */
     public function parent(): BelongsTo
     {
@@ -42,12 +46,21 @@ class CategoryModel extends Model
     }
 
     /**
-     * @phpstan-ignore-next-line
+     * @return HasMany<CategoryModel, $this>
      */
     public function children(): HasMany
     {
         return $this->hasMany(self::class, 'parent_id');
     }
+
+    /**
+     * @return HasMany<ProductModel, $this>
+     */
+    public function products(): HasMany
+    {
+        return $this->hasMany(ProductModel::class, 'category_id');
+    }
+
 
     public function getId(): int
     {

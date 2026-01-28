@@ -38,7 +38,7 @@ final readonly class DeleteCategoryController extends Controller
 
            $this->service->deleteCategory($validatedData['id']);
         } catch (CategoryNotFoundException $e) {
-            throw BadRequestException::fromException($e);
+            throw new BadRequestException($e);
         }
 
         $this->logger->info("Category deleted successfully.", ["category_id" => $validatedData['id']]);

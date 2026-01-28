@@ -2,7 +2,6 @@
 
 namespace App\Http\Responses;
 
-use App\Http\Responses\Category\ArrayableResponse;
 use Illuminate\Http\JsonResponse;
 
 trait ApiResponse

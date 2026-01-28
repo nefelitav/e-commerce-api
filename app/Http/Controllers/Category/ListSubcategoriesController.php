@@ -41,7 +41,7 @@ final readonly class ListSubcategoriesController extends Controller
 
             $subCategories = $this->service->listSubcategories($validatedData['id']);
         } catch (Exception $e) {
-            throw UnprocessableEntityException::fromException($e);
+            throw new UnprocessableEntityException($e);
         }
 
         $subCategoriesArray = [];

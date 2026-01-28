@@ -2,6 +2,8 @@
 
 namespace App\Http\Responses\Category;
 
+use App\Http\Responses\ArrayableResponse;
+
 final class CreateCategoryResponse implements ArrayableResponse
 {
     /**

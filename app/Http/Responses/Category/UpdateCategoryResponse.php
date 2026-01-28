@@ -2,7 +2,7 @@
 
 namespace App\Http\Responses\Category;
 
-use Response;
+use App\Http\Responses\ArrayableResponse;
 
 final class UpdateCategoryResponse implements ArrayableResponse
 {

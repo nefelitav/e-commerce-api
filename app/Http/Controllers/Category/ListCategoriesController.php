@@ -36,7 +36,7 @@ final readonly class ListCategoriesController extends Controller
         try {
             $categories = $this->service->listCategories();
         } catch (Exception $e) {
-            throw UnprocessableEntityException::fromException($e);
+            throw new UnprocessableEntityException($e);
         }
 
         $categoriesArray = [];

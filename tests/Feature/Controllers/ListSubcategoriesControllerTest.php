@@ -19,7 +19,7 @@ class ListSubcategoriesControllerTest extends TestCase
 
         $parentCategory = CategoryModel::factory()->create();
 
-        $subcategories = CategoryModel::factory()->count(3)->create([
+        CategoryModel::factory()->count(3)->create([
             'parent_id' => $parentCategory->id,
         ]);
 

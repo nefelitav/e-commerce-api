@@ -2,6 +2,7 @@
 
 namespace App\Http\Responses\Category;
 
+use App\Http\Responses\ArrayableResponse;
 use App\Transformers\CategoryTransformer;
 use App\Dto\Category\Category;
 use Response;
