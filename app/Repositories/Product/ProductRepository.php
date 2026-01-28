@@ -30,7 +30,7 @@ class ProductRepository
         $products = ProductModel::query()->where('category_id', $categoryId)->get();
 
         if ($products->isEmpty()) {
-            return null;
+            return [];
         }
 
         return $products->map(fn(ProductModel $model) => Product::fromModel($model))->all();

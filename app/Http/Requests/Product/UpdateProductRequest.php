@@ -28,8 +28,8 @@ final class UpdateProductRequest extends FormRequest
             'id' => ['required', 'exists:categories,id'],
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
-            'price' => 'float',
-            'quantity' => 'int',
+            'price' => 'required|numeric',
+            'quantity' => 'required|integer',
             'category_id' => 'nullable|exists:categories,id',
         ];
     }
