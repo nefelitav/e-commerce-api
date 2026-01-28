@@ -6,12 +6,12 @@ use App\Models\Category\CategoryModel;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\Category\CategoryModel>
+ * @extends Factory<CategoryModel>
  */
 class CategoryModelFactory extends Factory
 {
     /**
-     * Define the model's default state.
+     * Model's default state.
      *
      * @return array<string, mixed>
      */
@@ -25,7 +25,7 @@ class CategoryModelFactory extends Factory
     }
 
     /**
-     * Define a state for child category with a valid parent.
+     * State for child category with a valid parent.
      */
     public function child(CategoryModel $parent): self
     {

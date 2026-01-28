@@ -14,6 +14,8 @@ final readonly class ProductTransformer
         return [
             'id' => $product->id,
             'name' => $product->name,
+            'price' => $product->price,
+            'quantity' => $product->quantity,
             'description' => $product->description,
             'category_id' => $product->categoryId,
         ];

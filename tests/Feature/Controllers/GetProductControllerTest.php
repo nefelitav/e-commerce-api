@@ -2,13 +2,13 @@
 
 namespace Tests\Feature\Controllers;
 
-use App\Models\Category\CategoryModel;
+use App\Models\Product\ProductModel;
 use App\Models\UserModel;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Symfony\Component\HttpFoundation\Response;
 use Tests\TestCase;
 
-class GetCategoryControllerTest extends TestCase
+class GetProductControllerTest extends TestCase
 {
     use RefreshDatabase;
 
@@ -17,9 +17,9 @@ class GetCategoryControllerTest extends TestCase
         $user = UserModel::factory()->create();
         $this->actingAs($user);
 
-        $category = CategoryModel::factory()->create();
+        $product = ProductModel::factory()->create();
 
-        $response = $this->getJson(route('categories.show', ['id' => $category->id]));
+        $response = $this->getJson(route('products.show', ['id' => $product->id]));
 
         $response->assertStatus(Response::HTTP_OK)
             ->assertJsonStructure([
@@ -29,15 +29,15 @@ class GetCategoryControllerTest extends TestCase
                 ],
             ]);
 
-        $this->assertEquals($category->id, $response->json('data.id'));
+        $this->assertEquals($product->id, $response->json('data.id'));
     }
 
-    public function test_show_returns_validation_error_for_nonexistent_category(): void
+    public function test_show_returns_validation_error_for_nonexistent_product(): void
     {
         $user = UserModel::factory()->create();
         $this->actingAs($user);
 
-        $response = $this->getJson(route('categories.show', ['id' => 999999]));
+        $response = $this->getJson(route('products.show', ['id' => 999999]));
 
         $response->assertStatus(Response::HTTP_UNPROCESSABLE_ENTITY);
         $response->assertJsonValidationErrors('id');

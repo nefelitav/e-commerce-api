@@ -30,7 +30,7 @@ final readonly class GetProductController extends Controller
     {
         $getProductResponse = $this->executeRequest($request);
 
-        return self::success($getProductResponse, Response::HTTP_FOUND);
+        return self::success($getProductResponse, Response::HTTP_OK);
     }
 
     private function executeRequest(GetProductRequest $request): GetProductResponse

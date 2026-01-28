@@ -12,6 +12,14 @@ final class CreateProductRequest extends FormRequest
     }
 
     /**
+     * @return array<string, mixed>
+     */
+    public function validationData(): array
+    {
+        return array_merge($this->request->all(), $this->route()->parameters());
+    }
+
+    /**
      * @return array<string, string>
      */
     public function rules(): array
@@ -19,8 +27,8 @@ final class CreateProductRequest extends FormRequest
         return [
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
-            'price' => 'float',
-            'quantity' => 'int',
+            'price' => 'required|numeric',
+            'quantity' => 'required|integer',
             'category_id' => 'nullable|exists:categories,id',
         ];
     }

@@ -9,7 +9,7 @@ final readonly class UnpersistedProduct
         public ?string $description,
         public float   $price,
         public int     $quantity,
-        public ?int    $categoryId,
+        public int    $categoryId,
     ) {}
 
     /**
@@ -21,7 +21,7 @@ final readonly class UnpersistedProduct
             'name' => $this->name,
             'description' => $this->description,
             'price' => $this->price,
-            'quanity' => $this->quantity,
+            'quantity' => $this->quantity,
             'category_id' => $this->categoryId,
         ];
     }
@@ -33,9 +33,9 @@ final readonly class UnpersistedProduct
     {
         return new self(
             $data['name'],
-            $data['description'],
+            $data['description'] ?? null,
             $data['price'],
-            $data['quanity'],
+            $data['quantity'],
             $data['category_id'],
         );
     }

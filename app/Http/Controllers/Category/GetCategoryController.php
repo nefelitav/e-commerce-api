@@ -30,7 +30,7 @@ final readonly class GetCategoryController extends Controller
     {
         $getCategoryResponse = $this->executeRequest($request);
 
-        return self::success($getCategoryResponse, Response::HTTP_FOUND);
+        return self::success($getCategoryResponse, Response::HTTP_OK);
     }
 
     private function executeRequest(GetCategoryRequest $request): GetCategoryResponse

@@ -5,13 +5,13 @@ namespace App\Http\Responses\Category;
 use App\Http\Responses\ArrayableResponse;
 use Symfony\Component\HttpFoundation\Response;
 
-final class GetCategoryResponse implements ArrayableResponse
+final readonly class GetCategoryResponse implements ArrayableResponse
 {
     /**
      * @param array<string, mixed> $category
      */
     public function __construct(
-        private readonly array $category
+        private array $category
     ) {
     }
 
