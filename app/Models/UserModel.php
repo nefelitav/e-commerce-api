@@ -6,6 +6,9 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
+/**
+ * @property int $id
+ */
 class UserModel extends Authenticatable
 {
     /** @use HasFactory<\Database\Factories\UserModelFactory> */

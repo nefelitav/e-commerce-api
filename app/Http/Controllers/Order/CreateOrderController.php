@@ -37,7 +37,7 @@ final readonly class CreateOrderController extends Controller
         /** @var array<string, mixed> $validatedData */
         $validatedData = $request->validated();
 
-        $userId = $request->user()?->id ?? ($validatedData['user_id'] ?? null);
+        $userId = $request->user()->id ?? ($validatedData['user_id'] ?? null);
         if ($userId === null) {
             throw new BadRequestException('User is required to create an order');
         }

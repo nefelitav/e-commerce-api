@@ -20,7 +20,7 @@ final readonly class Order
     public static function fromModel(OrderModel $order): self
     {
         $items = [];
-        if ($order->relationLoaded('items') && $order->items !== null) {
+        if ($order->relationLoaded('items')) {
             foreach ($order->items as $item) {
                 $items[] = OrderItem::fromModel($item);
             }
