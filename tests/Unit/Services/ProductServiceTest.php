@@ -2,11 +2,15 @@
 
 namespace Tests\Unit\Services;
 
+use App\Dto\InventoryHistory\InventoryHistoryEntry;
+use App\Dto\InventoryHistory\UnpersistedInventoryHistoryEntry;
 use App\Dto\Product\Product;
 use App\Dto\Product\UnpersistedProduct;
 use App\Exceptions\ProductAlreadyExistsException;
 use App\Exceptions\ProductNotFoundException;
+use App\Models\InventoryHistory\InventoryHistoryModel;
 use App\Models\Product\ProductModel;
+use App\Repositories\InventoryHistory\InventoryHistoryRepository;
 use App\Repositories\Product\ProductRepository;
 use App\Services\Product\ProductService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -19,6 +23,8 @@ class ProductServiceTest extends TestCase
 
     /** @var ProductRepository&MockObject */
     private ProductRepository $repository;
+    /** @var InventoryHistoryRepository&MockObject */
+    private InventoryHistoryRepository $inventoryHistoryRepository;
     private ProductService $service;
 
     protected function setUp(): void
@@ -26,7 +32,8 @@ class ProductServiceTest extends TestCase
         parent::setUp();
 
         $this->repository = $this->createMock(ProductRepository::class);
-        $this->service = new ProductService($this->repository);
+        $this->inventoryHistoryRepository = $this->createMock(InventoryHistoryRepository::class);
+        $this->service = new ProductService($this->repository, $this->inventoryHistoryRepository);
     }
 
     public function test_listProducts_returns_array_of_products(): void
@@ -119,6 +126,12 @@ class ProductServiceTest extends TestCase
             ->with($unpersisted)
             ->willReturn($persistedProduct);
 
+        $this->inventoryHistoryRepository
+            ->expects($this->once())
+            ->method('record')
+            ->with($this->isInstanceOf(UnpersistedInventoryHistoryEntry::class))
+            ->willReturn(InventoryHistoryEntry::fromModel(InventoryHistoryModel::factory()->create()));
+
         $result = $this->service->createProduct($unpersisted);
 
         $this->assertSame($persistedProduct, $result);
@@ -139,9 +152,19 @@ class ProductServiceTest extends TestCase
 
         $this->repository
             ->expects($this->once())
+            ->method('findById')
+            ->with($id)
+            ->willReturn($updatedProduct);
+
+        $this->repository
+            ->expects($this->once())
             ->method('update')
             ->with($id, $unpersisted)
             ->willReturn($updatedProduct);
+
+        $this->inventoryHistoryRepository
+            ->expects($this->never())
+            ->method('record');
 
         $result = $this->service->updateProduct($id, $unpersisted);
 
@@ -161,9 +184,9 @@ class ProductServiceTest extends TestCase
 
         $this->repository
             ->expects($this->once())
-            ->method('update')
-            ->with($id, $unpersisted)
-            ->willThrowException(new ProductNotFoundException($id));
+            ->method('findById')
+            ->with($id)
+            ->willReturn(null);
 
         $this->expectException(ProductNotFoundException::class);
 

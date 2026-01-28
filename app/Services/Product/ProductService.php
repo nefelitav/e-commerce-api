@@ -6,12 +6,15 @@ use App\Dto\Product\Product;
 use App\Dto\Product\UnpersistedProduct;
 use App\Exceptions\ProductAlreadyExistsException;
 use App\Exceptions\ProductNotFoundException;
+use App\Repositories\InventoryHistory\InventoryHistoryRepository;
+use App\Dto\InventoryHistory\UnpersistedInventoryHistoryEntry;
 use App\Repositories\Product\ProductRepository;
 
 final readonly class ProductService
 {
     public function __construct(
         private ProductRepository $repository,
+        private InventoryHistoryRepository $inventoryHistoryRepository,
     ) {
     }
 
@@ -47,7 +50,18 @@ final readonly class ProductService
             throw new ProductAlreadyExistsException($unpersistedProduct->name);
         }
 
-        return $this->repository->persist($unpersistedProduct);
+        $created = $this->repository->persist($unpersistedProduct);
+
+        // Record initial stock addition.
+        $this->inventoryHistoryRepository->record(new UnpersistedInventoryHistoryEntry(
+            productId: $created->id,
+            changeType: 'addition',
+            quantityChanged: $created->quantity,
+            previousQuantity: 0,
+            newQuantity: $created->quantity,
+        ));
+
+        return $created;
     }
 
     /**
@@ -55,7 +69,24 @@ final readonly class ProductService
      */
     public function updateProduct(int $id, UnpersistedProduct $unpersistedProduct): Product
     {
-        return $this->repository->update($id, $unpersistedProduct);
+        $existing = $this->repository->findById($id);
+        if ($existing === null) {
+            throw new ProductNotFoundException($id);
+        }
+
+        $updated = $this->repository->update($id, $unpersistedProduct);
+
+        if ($updated->quantity !== $existing->quantity) {
+            $this->inventoryHistoryRepository->record(new UnpersistedInventoryHistoryEntry(
+                productId: $updated->id,
+                changeType: 'adjustment',
+                quantityChanged: $updated->quantity - $existing->quantity,
+                previousQuantity: $existing->quantity,
+                newQuantity: $updated->quantity,
+            ));
+        }
+
+        return $updated;
     }
 
     /**

@@ -12,6 +12,7 @@ use App\Http\Controllers\Product\GetProductController;
 use App\Http\Controllers\Product\ListCategoryProductsController;
 use App\Http\Controllers\Product\ListProductsController;
 use App\Http\Controllers\Product\UpdateProductController;
+use App\Http\Controllers\InventoryHistory\ListInventoryHistoryController;
 use App\Http\Controllers\Order\CreateOrderController;
 use App\Http\Controllers\Order\DeleteOrderController;
 use App\Http\Controllers\Order\GetOrderController;
@@ -38,6 +39,7 @@ Route::prefix('api')->group(function () {
     Route::put('products/{id}', [UpdateProductController::class, 'update'])->name('products.update');
     Route::delete('products/{id}', [DeleteProductController::class, 'destroy'])->name('products.destroy');
     Route::get('categories/{id}/products', [ListCategoryProductsController::class, 'index'])->name('categories.products.index');
+    Route::get('products/{id}/inventory-history', [ListInventoryHistoryController::class, 'index'])->name('products.inventory-history.index');
 
     Route::get('orders', [ListOrdersController::class, 'index'])->name('orders.index');
     Route::get('orders/{id}', [GetOrderController::class, 'show'])->name('orders.show');
