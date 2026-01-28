@@ -12,6 +12,11 @@ use App\Http\Controllers\Product\GetProductController;
 use App\Http\Controllers\Product\ListCategoryProductsController;
 use App\Http\Controllers\Product\ListProductsController;
 use App\Http\Controllers\Product\UpdateProductController;
+use App\Http\Controllers\Order\CreateOrderController;
+use App\Http\Controllers\Order\DeleteOrderController;
+use App\Http\Controllers\Order\GetOrderController;
+use App\Http\Controllers\Order\ListOrdersController;
+use App\Http\Controllers\Order\UpdateOrderController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('api')->group(function () {
@@ -28,4 +33,10 @@ Route::prefix('api')->group(function () {
     Route::put('products/{id}', [UpdateProductController::class, 'update'])->name('products.update');
     Route::delete('products/{id}', [DeleteProductController::class, 'destroy'])->name('products.destroy');
     Route::get('categories/{id}/products', [ListCategoryProductsController::class, 'index'])->name('categories.products.index');
+
+    Route::get('orders', [ListOrdersController::class, 'index'])->name('orders.index');
+    Route::get('orders/{id}', [GetOrderController::class, 'show'])->name('orders.show');
+    Route::post('orders', [CreateOrderController::class, 'store'])->name('orders.store');
+    Route::put('orders/{id}', [UpdateOrderController::class, 'update'])->name('orders.update');
+    Route::delete('orders/{id}', [DeleteOrderController::class, 'destroy'])->name('orders.destroy');
 });

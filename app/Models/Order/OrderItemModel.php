@@ -1,0 +1,53 @@
+<?php
+
+namespace App\Models\Order;
+
+use App\Models\Product\ProductModel;
+use Database\Factories\Order\OrderItemModelFactory;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+
+/**
+ * @property int $id
+ * @property int $order_id
+ * @property int $product_id
+ * @property int $quantity
+ * @property float $unit_price
+ * @property OrderModel $order
+ * @property ProductModel $product
+ * @method static static create(array<mixed> $attributes = [])
+ */
+class OrderItemModel extends Model
+{
+    /** @use HasFactory<OrderItemModelFactory> */
+    use HasFactory;
+
+    protected $table = 'order_items';
+
+    public $timestamps = false;
+
+    protected $fillable = [
+        'order_id',
+        'product_id',
+        'quantity',
+        'unit_price',
+    ];
+
+    /**
+     * @return BelongsTo<OrderModel, $this>
+     */
+    public function order(): BelongsTo
+    {
+        return $this->belongsTo(OrderModel::class, 'order_id');
+    }
+
+    /**
+     * @return BelongsTo<ProductModel, $this>
+     */
+    public function product(): BelongsTo
+    {
+        return $this->belongsTo(ProductModel::class, 'product_id');
+    }
+}
+
