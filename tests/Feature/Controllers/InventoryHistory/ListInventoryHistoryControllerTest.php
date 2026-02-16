@@ -37,7 +37,6 @@ class ListInventoryHistoryControllerTest extends TestCase
                         'quantity_changed',
                         'previous_quantity',
                         'new_quantity',
-                        'created_at',
                     ],
                 ],
             ]);

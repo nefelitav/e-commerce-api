@@ -4,13 +4,13 @@ namespace App\Http\Responses\Category;
 
 use App\Http\Responses\ArrayableResponse;
 
-final class CreateCategoryResponse implements ArrayableResponse
+final readonly class CreateCategoryResponse implements ArrayableResponse
 {
     /**
      * @param array<string, mixed> $category
      */
     public function __construct(
-        private readonly array $category
+        private array $category
     ) {}
 
     /**

@@ -18,7 +18,6 @@ final readonly class InventoryHistoryTransformer
             'quantity_changed' => $entry->quantityChanged,
             'previous_quantity' => $entry->previousQuantity,
             'new_quantity' => $entry->newQuantity,
-            'created_at' => $entry->createdAt?->toISOString(),
         ];
     }
 }

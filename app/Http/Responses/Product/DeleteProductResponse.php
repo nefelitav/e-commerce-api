@@ -4,7 +4,7 @@ namespace App\Http\Responses\Product;
 
 use App\Http\Responses\ArrayableResponse;
 
-final class DeleteProductResponse implements ArrayableResponse
+final readonly class DeleteProductResponse implements ArrayableResponse
 {
     /**
      * @return  array<string, string>

@@ -14,7 +14,6 @@ final readonly class InventoryHistoryEntry
         public int $quantityChanged,
         public int $previousQuantity,
         public int $newQuantity,
-        public ?Carbon $createdAt,
     ) {}
 
     public static function fromModel(InventoryHistoryModel $model): self
@@ -26,7 +25,6 @@ final readonly class InventoryHistoryEntry
             $model->quantity_changed,
             $model->previous_quantity,
             $model->new_quantity,
-            $model->created_at,
         );
     }
 }

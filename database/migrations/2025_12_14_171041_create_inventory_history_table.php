@@ -25,7 +25,7 @@ return new class extends Migration
             $table->integer('quantity_changed');
             $table->integer('previous_quantity');
             $table->integer('new_quantity');
-            $table->timestamp('created_at')->index()->useCurrent();
+            $table->timestamps();
         });
     }
 

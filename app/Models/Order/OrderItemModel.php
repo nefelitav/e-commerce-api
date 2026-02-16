@@ -2,7 +2,9 @@
 
 namespace App\Models\Order;
 
+use App\Models\CreatedAtUtcTrait;
 use App\Models\Product\ProductModel;
+use App\Models\UpdatedAtUtcTrait;
 use Database\Factories\Order\OrderItemModelFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -20,12 +22,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class OrderItemModel extends Model
 {
+    use CreatedAtUtcTrait;
+    use UpdatedAtUtcTrait;
     /** @use HasFactory<OrderItemModelFactory> */
     use HasFactory;
 
     protected $table = 'order_items';
-
-    public $timestamps = false;
 
     protected $fillable = [
         'order_id',

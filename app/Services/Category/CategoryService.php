@@ -52,9 +52,16 @@ final readonly class CategoryService
 
     /**
      * @throws CategoryNotFoundException
+     * @throws CategoryAlreadyExistsException
      */
     public function updateCategory(int $id, UnpersistedCategory $unpersistedCategory): Category
     {
+        $existing = $this->repository->findByName($unpersistedCategory->name);
+
+        if ($existing) {
+            throw new CategoryAlreadyExistsException($unpersistedCategory->name);
+        }
+
         return $this->repository->update($id, $unpersistedCategory);
     }
 

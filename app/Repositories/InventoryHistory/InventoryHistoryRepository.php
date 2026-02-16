@@ -17,7 +17,6 @@ class InventoryHistoryRepository
         /** @var Collection<int, InventoryHistoryModel> $entries */
         $entries = InventoryHistoryModel::query()
             ->where('product_id', $productId)
-            ->orderByDesc('created_at')
             ->get();
 
         return $entries->map(fn (InventoryHistoryModel $m) => InventoryHistoryEntry::fromModel($m))->all();

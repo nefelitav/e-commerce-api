@@ -6,6 +6,7 @@ use App\Dto\Category\Category;
 use App\Dto\Category\UnpersistedCategory;
 use App\Exceptions\CategoryNotFoundException;
 use App\Models\Category\CategoryModel;
+use Illuminate\Database\Eloquent\Collection;
 
 class CategoryRepository
 {
@@ -30,7 +31,7 @@ class CategoryRepository
             return [];
         }
 
-        /** @var \Illuminate\Database\Eloquent\Collection<int, CategoryModel> $children */
+        /** @var Collection<int, CategoryModel> $children */
         $children = $category->children()->get();
 
         return $children
