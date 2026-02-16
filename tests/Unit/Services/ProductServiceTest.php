@@ -14,6 +14,7 @@ use App\Repositories\InventoryHistory\InventoryHistoryRepository;
 use App\Repositories\Product\ProductRepository;
 use App\Services\Product\ProductService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Pagination\LengthAwarePaginator;
 use PHPUnit\Framework\MockObject\MockObject;
 use Tests\TestCase;
 
@@ -38,15 +39,25 @@ class ProductServiceTest extends TestCase
 
     public function test_listProducts_returns_array_of_products(): void
     {
-        $products = [Product::fromModel(ProductModel::factory()->create())];
+        $productModels = ProductModel::factory()->count(2)->create();
+
+        $products = $productModels->map(fn($model) => Product::fromModel($model));
+
+        $paginator = new LengthAwarePaginator(
+            $products,
+            count($products),
+            15,
+            1
+        );
+
         $this->repository
             ->expects($this->once())
             ->method('getAll')
-            ->willReturn($products);
+            ->willReturn($paginator);
 
         $result = $this->service->listProducts();
 
-        $this->assertSame($products, $result);
+        $this->assertSame($paginator, $result);
     }
 
     public function test_getProductsByCategoryId_returns_array_of_products(): void

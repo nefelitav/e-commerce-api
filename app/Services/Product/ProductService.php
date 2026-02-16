@@ -9,6 +9,7 @@ use App\Exceptions\ProductNotFoundException;
 use App\Repositories\InventoryHistory\InventoryHistoryRepository;
 use App\Dto\InventoryHistory\UnpersistedInventoryHistoryEntry;
 use App\Repositories\Product\ProductRepository;
+use Illuminate\Pagination\LengthAwarePaginator;
 
 final readonly class ProductService
 {
@@ -19,11 +20,11 @@ final readonly class ProductService
     }
 
     /**
-     * @return array<Product>
+     * @return LengthAwarePaginator<int, Product>
      */
-    public function listProducts(): array
+    public function listProducts(int $page = 1, int $perPage = 15): LengthAwarePaginator
     {
-        return $this->repository->getAll();
+        return $this->repository->getAll($page, $perPage);
     }
 
     /**

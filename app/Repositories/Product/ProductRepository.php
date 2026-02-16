@@ -6,19 +6,24 @@ use App\Dto\Product\Product;
 use App\Dto\Product\UnpersistedProduct;
 use App\Exceptions\ProductNotFoundException;
 use App\Models\Product\ProductModel;
-use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Collection;
+use Illuminate\Pagination\LengthAwarePaginator;
 
 class ProductRepository
 {
     /**
-     * @return array<Product>
+     * @return LengthAwarePaginator<int, Product>
      */
-    public function getAll(): array
+    public function getAll(int $page = 1, int $perPage = 15): LengthAwarePaginator
     {
-        /** @var Collection<int, ProductModel> $products */
-        $products = ProductModel::all();
+        $paginator = ProductModel::query()->paginate($perPage, ['*'], 'page', $page);
 
-        return $products->map(fn(ProductModel $model) => Product::fromModel($model))->all();
+        /** @var Collection<int, Product> $items */
+        $items = $paginator->getCollection()->map(fn($model) => Product::fromModel($model));
+
+        $paginator->setCollection($items);
+
+        return $paginator;
     }
 
     /**

@@ -26,6 +26,59 @@ class ListProductsControllerTest extends TestCase
                         'name',
                     ],
                 ],
+                'meta' => [
+                    'current_page',
+                    'per_page',
+                    'total',
+                    'last_page',
+                ],
             ]);
+    }
+
+    public function test_list_products_with_pagination_returns_correct_page(): void
+    {
+        ProductModel::factory()->count(30)->create();
+
+        $page = 2;
+        $perPage = 10;
+
+        $this->getJson(route('v1.products.index', ['page' => $page, 'per_page' => $perPage]));
+
+        $response = $this->getJson(route('v1.products.index', [
+            'page' => $page,
+            'per_page' => $perPage,
+        ]));
+
+        $response->assertStatus(Response::HTTP_OK);
+
+        $response->assertJsonStructure([
+            'success',
+            'data' => [
+                '*' => [
+                    'id',
+                    'name',
+                    'description',
+                    'price',
+                ],
+            ],
+            'meta' => [
+                'current_page',
+                'per_page',
+                'total',
+                'last_page',
+            ],
+        ]);
+
+        $json = $response->json();
+        $this->assertEquals($page, $json['meta']['current_page']);
+        $this->assertEquals($perPage, $json['meta']['per_page']);
+        $this->assertEquals(30, $json['meta']['total']);
+        $this->assertEquals(3, $json['meta']['last_page']);
+
+        $this->assertCount($perPage, $json['data']);
+
+        $expectedIds = range(11, 20);
+        $actualIds = array_column($json['data'], 'id');
+        $this->assertEquals($expectedIds, $actualIds);
     }
 }

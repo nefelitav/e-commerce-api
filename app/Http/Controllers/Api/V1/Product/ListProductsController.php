@@ -26,26 +26,36 @@ final readonly class ListProductsController extends Controller
 
     public function index(): JsonResponse
     {
-        $listCategoriesResponse = $this->executeRequest();
+        $page = (int) request()->query('page', '1');
+        $perPage = (int) request()->query('per_page', '15');
+
+        $listCategoriesResponse = $this->executeRequest($page, $perPage);
 
         return self::success($listCategoriesResponse, Response::HTTP_OK);
     }
 
-    private function executeRequest(): ListProductsResponse
+    private function executeRequest(int $page, int $perPage): ListProductsResponse
     {
         try {
-            $products = $this->service->listProducts();
+            $productsPaginator = $this->service->listProducts($page, $perPage);
         } catch (Exception $e) {
             throw new UnprocessableEntityException($e);
         }
 
         $productsArray = [];
-        foreach ($products as $product) {
+        foreach ($productsPaginator->items() as $product) {
             $productsArray[] = $this->transformer->transform($product);
-
         }
         $this->logger->info("Products found.", ["products" => $productsArray]);
 
-        return new ListProductsResponse($productsArray);
+        return new ListProductsResponse(
+            $productsArray,
+            [
+                'current_page' => $productsPaginator->currentPage(),
+                'per_page' => $productsPaginator->perPage(),
+                'total' => $productsPaginator->total(),
+                'last_page' => $productsPaginator->lastPage(),
+            ]
+        );
     }
 }

@@ -28,7 +28,7 @@ class ListCategoryProductsControllerTest extends TestCase
             ->assertJsonStructure([
                 'success',
                 'data' => [
-                    '*' => ['id', 'name', 'description', 'price', 'quantity'],
+                    '*' => ['id', 'name', 'description', 'price', 'quantity', 'category_id'],
                 ],
             ]);
 
@@ -53,6 +53,8 @@ class ListCategoryProductsControllerTest extends TestCase
                 'success' => true,
                 'data' => [],
             ]);
+
+        $this->assertEmpty($response->json('data.data'));
     }
 
     public function test_subproducts_returns_404_for_nonexistent_product(): void
@@ -60,7 +62,11 @@ class ListCategoryProductsControllerTest extends TestCase
         $user = UserModel::factory()->create();
         $this->actingAs($user);
 
-        $response = $this->getJson(route('v1.categories.products.index', ['id' => 999999]));
+        $response = $this->getJson(route('v1.categories.products.index', [
+            'id' => 999999,
+            'page' => 1,
+            'per_page' => 10,
+        ]));
 
         $response->assertStatus(Response::HTTP_UNPROCESSABLE_ENTITY);
     }

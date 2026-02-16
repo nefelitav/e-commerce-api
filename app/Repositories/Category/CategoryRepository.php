@@ -6,18 +6,24 @@ use App\Dto\Category\Category;
 use App\Dto\Category\UnpersistedCategory;
 use App\Exceptions\CategoryNotFoundException;
 use App\Models\Category\CategoryModel;
-use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Collection;
+use Illuminate\Pagination\LengthAwarePaginator;
 
 class CategoryRepository
 {
     /**
-     * @return array<Category>
+     * @return LengthAwarePaginator<int, Category>
      */
-    public function getAll(): array
+    public function getAll(int $page = 1, int $perPage = 15): LengthAwarePaginator
     {
-        $categories = CategoryModel::with('children')->get();
+        $paginator = CategoryModel::query()->paginate($perPage, ['*'], 'page', $page);
 
-        return $categories->map(fn($model) => Category::fromModel($model))->all();
+        /** @var Collection<int, Category> $items */
+        $items = $paginator->getCollection()->map(fn($model) => Category::fromModel($model));
+
+        $paginator->setCollection($items);
+
+        return $paginator;
     }
 
     /**

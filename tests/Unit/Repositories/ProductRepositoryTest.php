@@ -29,10 +29,10 @@ class ProductRepositoryTest extends TestCase
 
         $products = $this->repository->getAll();
 
-        $this->assertCount(3, $products);
+        $this->assertCount(3, $products->items());
         $this->assertEquals(
             ProductModel::query()->first()->name,
-            $products[0]->name
+            $products->items()[0]->name
         );
     }
 

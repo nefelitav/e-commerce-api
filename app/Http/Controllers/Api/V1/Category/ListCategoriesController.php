@@ -26,26 +26,36 @@ final readonly class ListCategoriesController extends Controller
 
     public function index(): JsonResponse
     {
-        $listCategoriesResponse = $this->executeRequest();
+        $page = (int) request()->query('page', '1');
+        $perPage = (int) request()->query('per_page', '15');
+
+        $listCategoriesResponse = $this->executeRequest($page, $perPage);
 
         return self::success($listCategoriesResponse, Response::HTTP_OK);
     }
 
-    private function executeRequest(): ListCategoriesResponse
+    private function executeRequest(int $page, int $perPage): ListCategoriesResponse
     {
         try {
-            $categories = $this->service->listCategories();
+            $categoriesPaginator = $this->service->listCategories($page, $perPage);
         } catch (Exception $e) {
             throw new UnprocessableEntityException($e);
         }
 
         $categoriesArray = [];
-        foreach ($categories as $category) {
+        foreach ($categoriesPaginator->items() as $category) {
             $categoriesArray[] = $this->transformer->transform($category);
-
         }
         $this->logger->info("Categories found.", ["categories" => $categoriesArray]);
 
-        return new ListCategoriesResponse($categoriesArray);
+        return new ListCategoriesResponse(
+            $categoriesArray,
+            [
+                'current_page' => $categoriesPaginator->currentPage(),
+                'per_page' => $categoriesPaginator->perPage(),
+                'total' => $categoriesPaginator->total(),
+                'last_page' => $categoriesPaginator->lastPage(),
+            ]
+        );
     }
 }

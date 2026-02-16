@@ -7,6 +7,7 @@ use App\Dto\Category\UnpersistedCategory;
 use App\Exceptions\CategoryAlreadyExistsException;
 use App\Exceptions\CategoryNotFoundException;
 use App\Repositories\Category\CategoryRepository;
+use Illuminate\Pagination\LengthAwarePaginator;
 
 final readonly class CategoryService
 {
@@ -16,11 +17,11 @@ final readonly class CategoryService
     }
 
     /**
-     * @return array<Category>
+     * @return LengthAwarePaginator<int, Category>
      */
-    public function listCategories(): array
+    public function listCategories(int $page = 1, int $perPage = 15): LengthAwarePaginator
     {
-        return $this->repository->getAll();
+        return $this->repository->getAll($page, $perPage);
     }
 
     /**

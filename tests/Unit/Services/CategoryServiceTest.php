@@ -10,6 +10,7 @@ use App\Models\Category\CategoryModel;
 use App\Repositories\Category\CategoryRepository;
 use App\Services\Category\CategoryService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Tests\TestCase;
 
 class CategoryServiceTest extends TestCase
@@ -35,15 +36,23 @@ class CategoryServiceTest extends TestCase
 
     public function test_listCategories_returns_array_of_categories(): void
     {
-        $categories = [CategoryModel::factory()->create()];
+        $categoryModels = CategoryModel::factory()->count(2)->make();
+
+        $paginator = new LengthAwarePaginator(
+            $categoryModels,
+            count($categoryModels),
+            15,
+            1
+        );
+
         $this->repository
             ->expects($this->once())
             ->method('getAll')
-            ->willReturn($categories);
+            ->willReturn($paginator);
 
         $result = $this->service->listCategories();
 
-        $this->assertSame($categories, $result);
+        $this->assertSame($paginator, $result);
     }
 
     public function test_listSubcategories_returns_array_of_categories(): void

@@ -7,10 +7,12 @@ use App\Http\Responses\ArrayableResponse;
 final readonly class ListCategoriesResponse implements ArrayableResponse
 {
     /**
-     * @param array<int, array<string, mixed>> $categories
+     * @param array<int, array<string, mixed>> $data
+     * @param array<string, int> $meta
      */
     public function __construct(
-        private array $categories,
+        public array $data,
+        public array $meta,
     ) {}
 
     /**
@@ -19,7 +21,8 @@ final readonly class ListCategoriesResponse implements ArrayableResponse
     public function toArray(): array
     {
         return [
-            'data' => $this->categories,
+            'data' => $this->data,
+            'meta' => $this->meta,
             'message' => 'Categories found',
         ];
     }
