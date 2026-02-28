@@ -191,7 +191,7 @@ routes/api.php            # API Routes
 
 ## 📄 License
 
-This project is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+This project is open-sourced software licensed under the [Apache 2.0 license](https://www.apache.org/licenses/LICENSE-2.0).
 
 ## 📞 Support
 
