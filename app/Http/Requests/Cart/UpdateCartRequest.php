@@ -29,7 +29,7 @@ final class UpdateCartRequest extends FormRequest
             'user_id' => ['nullable', 'integer', 'exists:users,id'],
             'items' => ['nullable', 'array'],
             'items.*.product_id' => ['required_with:items', 'integer', 'exists:products,id'],
-            'items.*.quantity' => ['required_with:items', 'integer', 'min:1'],
+            'items.*.quantity' => ['required_with:items', 'integer', 'min:1', 'max:10000'],
         ];
     }
 }

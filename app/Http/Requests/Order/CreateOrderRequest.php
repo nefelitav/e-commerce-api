@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Order;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 final class CreateOrderRequest extends FormRequest
 {
@@ -26,12 +27,12 @@ final class CreateOrderRequest extends FormRequest
     {
         return [
             'user_id' => ['nullable', 'integer', 'exists:users,id'],
-            'status' => ['required', 'string', 'max:255'],
-            'total_price' => ['required', 'numeric'],
-            'items' => ['nullable', 'array'],
-            'items.*.product_id' => ['required_with:items', 'integer', 'exists:products,id'],
-            'items.*.quantity' => ['required_with:items', 'integer', 'min:1'],
-            'items.*.unit_price' => ['required_with:items', 'numeric', 'min:0'],
+            'status' => ['required', 'string', Rule::in(['pending', 'paid', 'shipped', 'delivered', 'cancelled', 'refunded'])],
+            'total_price' => ['required', 'numeric', 'min:0'],
+            'items' => ['required', 'array', 'min:1'],
+            'items.*.product_id' => ['required', 'integer', 'exists:products,id'],
+            'items.*.quantity' => ['required', 'integer', 'min:1', 'max:10000'],
+            'items.*.unit_price' => ['required', 'numeric', 'min:0'],
         ];
     }
 }

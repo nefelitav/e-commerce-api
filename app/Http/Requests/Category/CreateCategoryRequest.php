@@ -18,8 +18,8 @@ final class CreateCategoryRequest extends FormRequest
     {
         return [
             'name' => 'required|string|max:255',
-            'description' => 'nullable|string',
-            'parent_id' => 'nullable|exists:categories,id',
+            'description' => 'nullable|string|max:5000',
+            'parent_id' => 'nullable|integer|exists:categories,id',
         ];
     }
 }

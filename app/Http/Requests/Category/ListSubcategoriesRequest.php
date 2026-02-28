@@ -25,7 +25,7 @@ final class ListSubcategoriesRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'id' => ['required', 'exists:categories,id'],
+            'id' => ['required', 'integer', 'exists:categories,id'],
         ];
     }
 }

@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Category;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Contracts\Validation\Validator;
 
 final class UpdateCategoryRequest extends FormRequest
 {
@@ -25,10 +26,19 @@ final class UpdateCategoryRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'id' => ['required', 'exists:categories,id'],
+            'id' => ['required', 'integer', 'exists:categories,id'],
             'name' => 'required|string|max:255',
-            'description' => 'nullable|string',
-            'parent_id' => 'nullable|exists:categories,id',
+            'description' => 'nullable|string|max:5000',
+            'parent_id' => [
+                'nullable',
+                'integer',
+                'exists:categories,id',
+                function (string $attribute, mixed $value, \Closure $fail): void {
+                    if ($value !== null && (int) $value === (int) $this->input('id', $this->route('id'))) {
+                        $fail('A category cannot be its own parent.');
+                    }
+                },
+            ],
         ];
     }
 }

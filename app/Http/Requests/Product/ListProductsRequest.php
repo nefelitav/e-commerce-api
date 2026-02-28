@@ -23,12 +23,12 @@ final class ListProductsRequest extends FormRequest
             'sort' => ['sometimes', 'string', Rule::in(['id', 'name', 'price', 'quantity', 'created_at', 'updated_at'])],
             'order' => ['sometimes', 'string', Rule::in(['asc', 'desc'])],
             'filter' => ['sometimes', 'array'],
-            'filter.name' => ['sometimes', 'string'],
+            'filter.name' => ['sometimes', 'string', 'max:255'],
             'filter.category_id' => ['sometimes', 'integer', 'exists:categories,id'],
             'filter.min_price' => ['sometimes', 'numeric', 'min:0'],
-            'filter.max_price' => ['sometimes', 'numeric', 'min:0'],
+            'filter.max_price' => ['sometimes', 'numeric', 'min:0', 'gte:filter.min_price'],
             'filter.min_quantity' => ['sometimes', 'integer', 'min:0'],
-            'filter.max_quantity' => ['sometimes', 'integer', 'min:0'],
+            'filter.max_quantity' => ['sometimes', 'integer', 'min:0', 'gte:filter.min_quantity'],
             'include' => ['sometimes', 'string'],
         ];
     }

@@ -26,10 +26,10 @@ final class CreateProductRequest extends FormRequest
     {
         return [
             'name' => 'required|string|max:255',
-            'description' => 'nullable|string',
-            'price' => 'required|numeric',
-            'quantity' => 'required|integer',
-            'category_id' => 'nullable|exists:categories,id',
+            'description' => 'nullable|string|max:5000',
+            'price' => 'required|numeric|min:0.01',
+            'quantity' => 'required|integer|min:0',
+            'category_id' => 'nullable|integer|exists:categories,id',
         ];
     }
 }
