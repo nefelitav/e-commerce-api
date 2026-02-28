@@ -10,13 +10,15 @@ use App\Models\UserModel;
 use App\Repositories\Order\OrderRepository;
 use App\Services\Order\OrderService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Pagination\LengthAwarePaginator;
+use PHPUnit\Framework\MockObject\MockObject;
 use Tests\TestCase;
 
 class OrderServiceTest extends TestCase
 {
     use RefreshDatabase;
 
-    /** @var OrderRepository&\PHPUnit\Framework\MockObject\MockObject $repository */
+    /** @var OrderRepository&MockObject $repository */
     private OrderRepository $repository;
     private OrderService $service;
 
@@ -28,18 +30,21 @@ class OrderServiceTest extends TestCase
         $this->service = new OrderService($this->repository);
     }
 
-    public function test_listOrders_returns_array_of_orders(): void
+    public function test_listOrders_returns_paginator_of_orders(): void
     {
-        $orders = [Order::fromModel(OrderModel::factory()->create())];
+        $orderModel = OrderModel::factory()->create();
+        $order = Order::fromModel($orderModel);
+
+        $paginator = \Mockery::mock(LengthAwarePaginator::class);
+        $paginator->shouldReceive('items')->andReturn([$order]);
 
         $this->repository
             ->expects($this->once())
             ->method('getAll')
-            ->willReturn($orders);
+            ->with(1, 15, 'id', 'asc', [], [])
+            ->willReturn($paginator);
 
-        $result = $this->service->listOrders();
-
-        $this->assertSame($orders, $result);
+        $result = $this->service->listOrders(1, 15, 'id', 'asc', [], []);
     }
 
     public function test_getOrderById_returns_order(): void

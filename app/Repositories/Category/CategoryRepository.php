@@ -8,17 +8,44 @@ use App\Exceptions\CategoryNotFoundException;
 use App\Models\Category\CategoryModel;
 use Illuminate\Support\Collection;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Collection as LaravelCollection;
 
 class CategoryRepository
 {
     /**
+     * @param array<string, mixed> $filters
+     * @param array<string> $includes
      * @return LengthAwarePaginator<int, Category>
      */
-    public function getAll(int $page = 1, int $perPage = 15): LengthAwarePaginator
-    {
-        $paginator = CategoryModel::query()->paginate($perPage, ['*'], 'page', $page);
+    public function getAll(
+        int $page = 1,
+        int $perPage = 15,
+        string $sort = 'id',
+        string $order = 'asc',
+        array $filters = [],
+        array $includes = []
+    ): LengthAwarePaginator {
+        $query = CategoryModel::query();
 
-        /** @var Collection<int, Category> $items */
+        // Apply includes
+        if (!empty($includes)) {
+            $query->with($includes);
+        }
+
+        // Apply filters
+        if (isset($filters['name'])) {
+            $query->where('name', 'like', '%' . $filters['name'] . '%');
+        }
+        if (isset($filters['parent_id'])) {
+            $query->where('parent_id', $filters['parent_id']);
+        }
+
+        // Apply sorting
+        $query->orderBy($sort, $order);
+
+        $paginator = $query->paginate($perPage, ['*'], 'page', $page);
+
+        /** @var LaravelCollection<int, Category> $items */
         $items = $paginator->getCollection()->map(fn($model) => Category::fromModel($model));
 
         $paginator->setCollection($items);

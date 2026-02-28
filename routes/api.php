@@ -20,7 +20,6 @@ use App\Http\Controllers\Api\V1\Order\UpdateOrderController;
 use App\Http\Controllers\Api\V1\Product\CreateProductController;
 use App\Http\Controllers\Api\V1\Product\DeleteProductController;
 use App\Http\Controllers\Api\V1\Product\GetProductController;
-use App\Http\Controllers\Api\V1\Product\ListCategoryProductsController;
 use App\Http\Controllers\Api\V1\Product\ListProductsController;
 use App\Http\Controllers\Api\V1\Product\UpdateProductController;
 use Illuminate\Support\Facades\Route;
@@ -38,7 +37,6 @@ Route::prefix('api/v1')->group(function () {
     Route::post('products', [CreateProductController::class, 'store'])->name('v1.products.store');
     Route::put('products/{id}', [UpdateProductController::class, 'update'])->name('v1.products.update');
     Route::delete('products/{id}', [DeleteProductController::class, 'destroy'])->name('v1.products.destroy');
-    Route::get('categories/{id}/products', [ListCategoryProductsController::class, 'index'])->name('v1.categories.products.index');
     Route::get('products/{id}/inventory-history', [ListInventoryHistoryController::class, 'index'])->name('v1.products.inventory-history.index');
 
     Route::get('orders', [ListOrdersController::class, 'index'])->name('v1.orders.index');

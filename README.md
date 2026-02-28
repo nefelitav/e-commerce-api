@@ -1,59 +1,201 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Shop API
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+A comprehensive RESTful API for e-commerce built with Laravel 12, featuring advanced filtering, sorting, and pagination capabilities.
 
-## About Laravel
+## 🚀 Quick Start
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+```bash
+# Install dependencies
+composer install
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+# Setup environment
+cp .env.example .env
+php artisan key:generate
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+# Setup database
+touch database/database.sqlite
+php artisan migrate
+php artisan db:seed
 
-## Learning Laravel
+# Start server
+php artisan serve
+```
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+The API will be available at `http://localhost:8000/api/v1/`
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+## 📚 Documentation
 
-## Laravel Sponsors
+Complete documentation is available in the `docs/` directory:
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+- **[docs/README.md](./docs/README.md)** - Documentation navigation guide (START HERE)
+- **[docs/PROJECT_OVERVIEW.md](./docs/PROJECT_OVERVIEW.md)** - Project description and goals
+- **[docs/API_DOCUMENTATION.md](./docs/API_DOCUMENTATION.md)** - Complete API reference
+- **[docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)** - Design patterns and architecture
+- **[docs/SETUP_AND_DEVELOPMENT.md](./docs/SETUP_AND_DEVELOPMENT.md)** - Setup and development guide
+- **[docs/DATABASE_SCHEMA.md](./docs/DATABASE_SCHEMA.md)** - Database schema documentation
 
-### Premium Partners
+## 🎯 Features
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+- ✅ RESTful API with 25+ endpoints
+- ✅ Advanced filtering and sorting
+- ✅ Pagination with metadata
+- ✅ Request validation
+- ✅ Standardized responses
+- ✅ Comprehensive error handling
+- ✅ Repository pattern
+- ✅ Service layer architecture
+- ✅ Full test coverage
 
-## Contributing
+## 📊 Entity Relationships
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+```mermaid
+classDiagram
+    User "1" --> "0..*" Order : places
+    User "1" --> "1" Cart : owns
+    Order "1" --> "1..*" OrderItem : contains
+    Product "1" --> "0..*" OrderItem : appears_in
+    Cart "1" --> "0..*" CartItem : contains
+    Product "1" --> "0..*" CartItem : appears_in
+    Product "1" --> "0..*" InventoryHistory : tracks
+    Category "1" --> "0..*" Product : contains
+    Category "0..1" --> "0..*" Category : parent
+```
 
-## Code of Conduct
+## 🔧 Technology Stack
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+- **Laravel 12** - PHP Framework
+- **PHP 8.2+** - Programming Language
+- **SQLite** - Database
+- **PHPUnit** - Testing Framework
+- **L5 Swagger** - API Documentation
 
-## Security Vulnerabilities
+## 📋 API Resources
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+### Products
+- List products with filters (name, category, price, quantity)
+- Sort by any field
+- Include category relationships
+- Pagination support
 
-## License
+### Categories
+- Hierarchical structure (parent-child)
+- Filter by parent category
+- List subcategories
+- Full CRUD operations
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+### Orders
+- Create and manage orders
+- Filter by status or price range
+- Track order items
+- User-specific orders
+
+### Carts
+- Shopping cart management
+- Add/remove items
+- Quantity updates
+- User-specific carts
+
+### Inventory History
+- Track stock changes
+- Audit trail
+- Product-specific history
+
+## 🚀 Quick API Examples
+
+```bash
+# List all products
+GET /api/v1/products
+
+# Filter products by category and price
+GET /api/v1/products?filter[category_id]=1&filter[min_price]=100&filter[max_price]=500
+
+# Sort products by price
+GET /api/v1/products?sort=price&order=asc
+
+# Get product with category
+GET /api/v1/products?include=category
+
+# List root categories
+GET /api/v1/categories?filter[parent_id]=null
+
+# Get pending orders
+GET /api/v1/orders?filter[status]=pending&sort=created_at&order=desc
+```
+
+## 🧪 Testing
+
+```bash
+# Run all tests
+php artisan test
+
+# Run specific test file
+php artisan test tests/Feature/Controllers/Product/ListProductsControllerTest.php
+
+# Run with coverage
+php artisan test --coverage
+```
+
+## 📖 API Documentation
+
+Access Swagger UI at: `http://localhost:8000/api/documentation`
+
+Generate documentation:
+```bash
+php artisan l5-swagger:generate
+```
+
+## 🛠️ Development
+
+```bash
+# Run development server
+php artisan serve
+
+# Watch logs
+php artisan pail
+
+# Run migrations
+php artisan migrate
+
+# Run seeds
+php artisan db:seed
+
+# Clear cache
+php artisan cache:clear
+```
+
+## 📦 Project Structure
+
+```
+app/
+├── Dto/                    # Data Transfer Objects
+├── Http/
+│   ├── Controllers/        # API Controllers
+│   ├── Requests/          # Request Validation
+│   └── Responses/         # Response Objects
+├── Models/                # Eloquent Models
+├── Repositories/          # Data Access Layer
+├── Services/              # Business Logic Layer
+└── Transformers/          # Response Transformation
+
+docs/                      # Complete Documentation
+tests/                     # Feature & Unit Tests
+routes/api.php            # API Routes
+```
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Write/update tests
+5. Submit a pull request
+
+## 📄 License
+
+This project is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+
+## 📞 Support
+
+For detailed documentation, see the `docs/` directory.
+For API usage, see `docs/API_DOCUMENTATION.md`.
+For development, see `docs/SETUP_AND_DEVELOPMENT.md`.

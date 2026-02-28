@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1\Order;
 
 use App\Exceptions\UnprocessableEntityException;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Order\ListOrdersRequest;
 use App\Http\Responses\ApiResponse;
 use App\Http\Responses\Order\ListOrdersResponse;
 use App\Services\Order\OrderService;
@@ -24,29 +25,64 @@ final readonly class ListOrdersController extends Controller
     ) {
     }
 
-    public function index(): JsonResponse
+    public function index(ListOrdersRequest $request): JsonResponse
     {
-        $listOrdersResponse = $this->executeRequest();
+        /** @var array<string, mixed> $validated */
+        $validated = $request->validated();
+
+        $listOrdersResponse = $this->executeRequest(
+            $validated['page'],
+            $validated['per_page'],
+            $validated['sort'],
+            $validated['order'],
+            $validated['filter'],
+            $validated['include']
+        );
 
         return self::success($listOrdersResponse, Response::HTTP_OK);
     }
 
-    private function executeRequest(): ListOrdersResponse
-    {
+    /**
+     * @param array<string, mixed> $filters
+     * @param array<string> $includes
+     */
+    private function executeRequest(
+        int $page,
+        int $perPage,
+        string $sort,
+        string $order,
+        array $filters,
+        array $includes
+    ): ListOrdersResponse {
         try {
-            $orders = $this->service->listOrders();
+            $ordersPaginator = $this->service->listOrders(
+                $page,
+                $perPage,
+                $sort,
+                $order,
+                $filters,
+                $includes
+            );
         } catch (Exception $e) {
             throw new UnprocessableEntityException($e);
         }
 
         $ordersArray = [];
-        foreach ($orders as $order) {
-            $ordersArray[] = $this->transformer->transform($order);
+        foreach ($ordersPaginator->items() as $orderItem) {
+            $ordersArray[] = $this->transformer->transform($orderItem);
         }
 
         $this->logger->info("Orders found.", ["orders" => $ordersArray]);
 
-        return new ListOrdersResponse($ordersArray);
+        return new ListOrdersResponse(
+            $ordersArray,
+            [
+                'current_page' => $ordersPaginator->currentPage(),
+                'per_page' => $ordersPaginator->perPage(),
+                'total' => $ordersPaginator->total(),
+                'last_page' => $ordersPaginator->lastPage(),
+            ]
+        );
     }
 }
 

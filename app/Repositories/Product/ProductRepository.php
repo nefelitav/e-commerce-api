@@ -12,11 +12,49 @@ use Illuminate\Pagination\LengthAwarePaginator;
 class ProductRepository
 {
     /**
+     * @param array<string, mixed> $filters
+     * @param array<string> $includes
      * @return LengthAwarePaginator<int, Product>
      */
-    public function getAll(int $page = 1, int $perPage = 15): LengthAwarePaginator
-    {
-        $paginator = ProductModel::query()->paginate($perPage, ['*'], 'page', $page);
+    public function getAll(
+        int $page = 1,
+        int $perPage = 15,
+        string $sort = 'id',
+        string $order = 'asc',
+        array $filters = [],
+        array $includes = []
+    ): LengthAwarePaginator {
+        $query = ProductModel::query();
+
+        // Apply includes
+        if (!empty($includes)) {
+            $query->with($includes);
+        }
+
+        // Apply filters
+        if (isset($filters['name'])) {
+            $query->where('name', 'like', '%' . $filters['name'] . '%');
+        }
+        if (isset($filters['category_id'])) {
+            $query->where('category_id', $filters['category_id']);
+        }
+        if (isset($filters['min_price'])) {
+            $query->where('price', '>=', $filters['min_price']);
+        }
+        if (isset($filters['max_price'])) {
+            $query->where('price', '<=', $filters['max_price']);
+        }
+        if (isset($filters['min_quantity'])) {
+            $query->where('quantity', '>=', $filters['min_quantity']);
+        }
+        if (isset($filters['max_quantity'])) {
+            $query->where('quantity', '<=', $filters['max_quantity']);
+        }
+
+        // Apply sorting
+        $query->orderBy($sort, $order);
+
+        $paginator = $query->paginate($perPage, ['*'], 'page', $page);
 
         /** @var Collection<int, Product> $items */
         $items = $paginator->getCollection()->map(fn($model) => Product::fromModel($model));

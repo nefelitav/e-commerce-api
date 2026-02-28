@@ -78,4 +78,23 @@ class ListCategoriesControllerTest extends TestCase
         $actualIds = array_column($json['data'], 'id');
         $this->assertEquals($expectedIds, $actualIds);
     }
+
+    public function test_list_categories_with_sorting_by_created_at(): void
+    {
+        CategoryModel::factory()->create(['name' => 'First']);
+        sleep(1);
+        CategoryModel::factory()->create(['name' => 'Second']);
+
+        $response = $this->getJson(route('v1.categories.index', [
+            'sort' => 'created_at',
+            'order' => 'asc',
+        ]));
+
+        $response->assertStatus(Response::HTTP_OK);
+        $json = $response->json();
+
+        $names = array_column($json['data'], 'name');
+        $this->assertEquals(['First', 'Second'], array_slice($names, 0, 2));
+    }
 }
+

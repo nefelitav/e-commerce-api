@@ -8,19 +8,56 @@ use App\Exceptions\OrderNotFoundException;
 use App\Models\Order\OrderItemModel;
 use App\Models\Order\OrderModel;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Collection as LaravelCollection;
 use Illuminate\Support\Facades\DB;
 
 class OrderRepository
 {
     /**
-     * @return array<Order>
+     * @param array<string, mixed> $filters
+     * @param array<string> $includes
+     * @return LengthAwarePaginator<int, Order>
      */
-    public function getAll(): array
-    {
-        /** @var Collection<int, OrderModel> $orders */
-        $orders = OrderModel::with('items')->get();
+    public function getAll(
+        int $page = 1,
+        int $perPage = 15,
+        string $sort = 'id',
+        string $order = 'asc',
+        array $filters = [],
+        array $includes = []
+    ): LengthAwarePaginator {
+        $query = OrderModel::query();
 
-        return $orders->map(fn (OrderModel $model) => Order::fromModel($model))->all();
+        // Apply includes
+        if (!empty($includes)) {
+            $query->with($includes);
+        } else {
+            $query->with('items');
+        }
+
+        // Apply filters
+        if (isset($filters['status'])) {
+            $query->where('status', $filters['status']);
+        }
+        if (isset($filters['min_total'])) {
+            $query->where('total_price', '>=', $filters['min_total']);
+        }
+        if (isset($filters['max_total'])) {
+            $query->where('total_price', '<=', $filters['max_total']);
+        }
+
+        // Apply sorting
+        $query->orderBy($sort, $order);
+
+        $paginator = $query->paginate($perPage, ['*'], 'page', $page);
+
+        /** @var LaravelCollection<int, Order> $items */
+        $items = $paginator->getCollection()->map(fn($model) => Order::fromModel($model));
+
+        $paginator->setCollection($items);
+
+        return $paginator;
     }
 
     public function findById(int $id): ?Order

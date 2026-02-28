@@ -81,4 +81,22 @@ class ListProductsControllerTest extends TestCase
         $actualIds = array_column($json['data'], 'id');
         $this->assertEquals($expectedIds, $actualIds);
     }
+
+    public function test_list_products_with_sorting_by_price(): void
+    {
+        ProductModel::factory()->create(['price' => 100.00]);
+        ProductModel::factory()->create(['price' => 50.00]);
+        ProductModel::factory()->create(['price' => 75.00]);
+
+        $response = $this->getJson(route('v1.products.index', [
+            'sort' => 'price',
+            'order' => 'asc',
+        ]));
+
+        $response->assertStatus(Response::HTTP_OK);
+        $json = $response->json();
+
+        $prices = array_column($json['data'], 'price');
+        $this->assertEquals([50, 75, 100], $prices);
+    }
 }

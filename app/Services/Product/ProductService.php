@@ -20,11 +20,19 @@ final readonly class ProductService
     }
 
     /**
+     * @param array<string, mixed> $filters
+     * @param array<string> $includes
      * @return LengthAwarePaginator<int, Product>
      */
-    public function listProducts(int $page = 1, int $perPage = 15): LengthAwarePaginator
-    {
-        return $this->repository->getAll($page, $perPage);
+    public function listProducts(
+        int $page = 1,
+        int $perPage = 15,
+        string $sort = 'id',
+        string $order = 'asc',
+        array $filters = [],
+        array $includes = []
+    ): LengthAwarePaginator {
+        return $this->repository->getAll($page, $perPage, $sort, $order, $filters, $includes);
     }
 
     /**

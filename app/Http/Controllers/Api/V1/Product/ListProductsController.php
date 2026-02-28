@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1\Product;
 
 use App\Exceptions\UnprocessableEntityException;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Product\ListProductsRequest;
 use App\Http\Responses\ApiResponse;
 use App\Http\Responses\Product\ListProductsResponse;
 use App\Services\Product\ProductService;
@@ -24,20 +25,44 @@ final readonly class ListProductsController extends Controller
     ) {
     }
 
-    public function index(): JsonResponse
+    public function index(ListProductsRequest $request): JsonResponse
     {
-        $page = (int) request()->query('page', '1');
-        $perPage = (int) request()->query('per_page', '15');
+        /** @var array<string, mixed> $validated */
+        $validated = $request->validated();
 
-        $listCategoriesResponse = $this->executeRequest($page, $perPage);
+        $listProductsResponse = $this->executeRequest(
+            $validated['page'],
+            $validated['per_page'],
+            $validated['sort'],
+            $validated['order'],
+            $validated['filter'],
+            $validated['include']
+        );
 
-        return self::success($listCategoriesResponse, Response::HTTP_OK);
+        return self::success($listProductsResponse, Response::HTTP_OK);
     }
 
-    private function executeRequest(int $page, int $perPage): ListProductsResponse
-    {
+    /**
+     * @param array<string, mixed> $filters
+     * @param array<string> $includes
+     */
+    private function executeRequest(
+        int $page,
+        int $perPage,
+        string $sort,
+        string $order,
+        array $filters,
+        array $includes
+    ): ListProductsResponse {
         try {
-            $productsPaginator = $this->service->listProducts($page, $perPage);
+            $productsPaginator = $this->service->listProducts(
+                $page,
+                $perPage,
+                $sort,
+                $order,
+                $filters,
+                $includes
+            );
         } catch (Exception $e) {
             throw new UnprocessableEntityException($e);
         }

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1\Category;
 
 use App\Exceptions\UnprocessableEntityException;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Category\ListCategoriesRequest;
 use App\Http\Responses\ApiResponse;
 use App\Http\Responses\Category\ListCategoriesResponse;
 use App\Services\Category\CategoryService;
@@ -24,20 +25,44 @@ final readonly class ListCategoriesController extends Controller
     ) {
     }
 
-    public function index(): JsonResponse
+    public function index(ListCategoriesRequest $request): JsonResponse
     {
-        $page = (int) request()->query('page', '1');
-        $perPage = (int) request()->query('per_page', '15');
+        /** @var array<string, mixed> $validated */
+        $validated = $request->validated();
 
-        $listCategoriesResponse = $this->executeRequest($page, $perPage);
+        $listCategoriesResponse = $this->executeRequest(
+            $validated['page'],
+            $validated['per_page'],
+            $validated['sort'],
+            $validated['order'],
+            $validated['filter'],
+            $validated['include']
+        );
 
         return self::success($listCategoriesResponse, Response::HTTP_OK);
     }
 
-    private function executeRequest(int $page, int $perPage): ListCategoriesResponse
-    {
+    /**
+     * @param array<string, mixed> $filters
+     * @param array<string> $includes
+     */
+    private function executeRequest(
+        int $page,
+        int $perPage,
+        string $sort,
+        string $order,
+        array $filters,
+        array $includes
+    ): ListCategoriesResponse {
         try {
-            $categoriesPaginator = $this->service->listCategories($page, $perPage);
+            $categoriesPaginator = $this->service->listCategories(
+                $page,
+                $perPage,
+                $sort,
+                $order,
+                $filters,
+                $includes
+            );
         } catch (Exception $e) {
             throw new UnprocessableEntityException($e);
         }

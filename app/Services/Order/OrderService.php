@@ -6,6 +6,7 @@ use App\Dto\Order\Order;
 use App\Dto\Order\UnpersistedOrder;
 use App\Exceptions\OrderNotFoundException;
 use App\Repositories\Order\OrderRepository;
+use Illuminate\Pagination\LengthAwarePaginator;
 
 final readonly class OrderService
 {
@@ -15,11 +16,19 @@ final readonly class OrderService
     }
 
     /**
-     * @return array<Order>
+     * @param array<string, mixed> $filters
+     * @param array<string> $includes
+     * @return LengthAwarePaginator<int, Order>
      */
-    public function listOrders(): array
-    {
-        return $this->repository->getAll();
+    public function listOrders(
+        int $page = 1,
+        int $perPage = 15,
+        string $sort = 'id',
+        string $order = 'asc',
+        array $filters = [],
+        array $includes = []
+    ): LengthAwarePaginator {
+        return $this->repository->getAll($page, $perPage, $sort, $order, $filters, $includes);
     }
 
     public function getOrderById(int $id): ?Order
