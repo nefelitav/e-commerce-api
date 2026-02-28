@@ -144,7 +144,6 @@ Generate documentation:
 php artisan l5-swagger:generate
 ```
 
-## 🛠️ Development
 
 ```bash
 # Run development server

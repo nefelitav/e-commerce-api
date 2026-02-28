@@ -12,6 +12,15 @@
 9. [Pagination](#pagination)
 10. [Filtering](#filtering)
 11. [Sorting](#sorting)
+3. [Endpoints Overview](#endpoints-overview)
+4. [Products Endpoints](#products-endpoints)
+5. [Categories Endpoints](#categories-endpoints)
+6. [Orders Endpoints](#orders-endpoints)
+7. [Carts Endpoints](#carts-endpoints)
+8. [Error Handling](#error-handling)
+9. [Pagination](#pagination)
+10. [Filtering](#filtering)
+11. [Sorting](#sorting)
 
 ---
 
@@ -915,4 +924,5 @@ GET /api/v1/carts/{id}?include=items
 ---
 
 This documentation covers all endpoints, parameters, and examples. For more details on specific resources, refer to the individual resource documentation files.
+
 
