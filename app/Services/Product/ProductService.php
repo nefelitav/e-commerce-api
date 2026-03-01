@@ -101,7 +101,7 @@ final readonly class ProductService
 
                 $previousQuantity = $lockedModel->quantity;
                 $newQuantity = $unpersistedProduct->quantity;
-    
+
                 if ($newQuantity < 0) {
                     throw new InsufficientStockException($id, $newQuantity, $previousQuantity);
                 }

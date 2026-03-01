@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api\V1\Order;
 
 use App\Dto\Order\UnpersistedOrder;
 use App\Exceptions\BadRequestException;
+use App\Exceptions\InsufficientStockException;
+use App\Exceptions\ProductNotFoundException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Order\CreateOrderRequest;
 use App\Http\Responses\ApiResponse;
@@ -45,7 +47,11 @@ final readonly class CreateOrderController extends Controller
         $validatedData['user_id'] = $userId;
         $unpersistedOrder = UnpersistedOrder::fromArray($validatedData);
 
-        $createdOrder = $this->service->createOrder($unpersistedOrder);
+        try {
+            $createdOrder = $this->service->createOrder($unpersistedOrder);
+        } catch (ProductNotFoundException | InsufficientStockException $e) {
+            throw new BadRequestException($e);
+        }
 
         $createdOrderData = $this->transformer->transform($createdOrder);
         $this->logger->info("New order created.", ["order" => $createdOrderData]);
