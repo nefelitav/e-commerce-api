@@ -40,6 +40,9 @@ class OrderRepository
         if (isset($filters['status'])) {
             $query->where('status', $filters['status']);
         }
+        if (isset($filters['user_id'])) {
+            $query->where('user_id', $filters['user_id']);
+        }
         if (isset($filters['min_total'])) {
             $query->where('total_price', '>=', $filters['min_total']);
         }
@@ -87,33 +90,35 @@ class OrderRepository
         return $created;
     }
 
-    /**
-     * @throws OrderNotFoundException
-     */
     public function update(int $id, UnpersistedOrder $unpersistedOrder): Order
     {
         /** @var Order $updated */
-        $updated = DB::transaction(function () use ($id, $unpersistedOrder) {
-            /** @var OrderModel|null $orderModel */
-            $orderModel = OrderModel::query()->where('id', $id)->first();
+        $updated = DB::transaction(
+            /**
+             * @throws OrderNotFoundException
+             */
+            function () use ($id, $unpersistedOrder) {
+                /** @var OrderModel|null $orderModel */
+                $orderModel = OrderModel::query()->where('id', $id)->first();
 
-            if (!$orderModel) {
-                throw new OrderNotFoundException($id);
-            }
-
-            $orderModel->update($unpersistedOrder->toArray());
-
-            if (!empty($unpersistedOrder->items)) {
-                OrderItemModel::query()->where('order_id', $orderModel->id)->delete();
-                foreach ($unpersistedOrder->items as $item) {
-                    OrderItemModel::create($item->toArray($orderModel->id));
+                if (!$orderModel) {
+                    throw new OrderNotFoundException($id);
                 }
+
+                $orderModel->update($unpersistedOrder->toArray());
+
+                if (!empty($unpersistedOrder->items)) {
+                    OrderItemModel::query()->where('order_id', $orderModel->id)->delete();
+                    foreach ($unpersistedOrder->items as $item) {
+                        OrderItemModel::create($item->toArray($orderModel->id));
+                    }
+                }
+
+                $orderModel->load('items');
+
+                return Order::fromModel($orderModel);
             }
-
-            $orderModel->load('items');
-
-            return Order::fromModel($orderModel);
-        });
+        );
 
         return $updated;
     }

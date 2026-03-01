@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Order;
 
+use App\Enums\OrderStatus;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -28,7 +29,7 @@ final class UpdateOrderRequest extends FormRequest
         return [
             'id' => ['required', 'integer', 'exists:orders,id'],
             'user_id' => ['nullable', 'integer', 'exists:users,id'],
-            'status' => ['required', 'string', Rule::in(['pending', 'paid', 'shipped', 'delivered', 'cancelled', 'refunded'])],
+            'status' => ['required', 'string', Rule::enum(OrderStatus::class)],
             'total_price' => ['required', 'numeric', 'min:0'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.product_id' => ['required', 'integer', 'exists:products,id'],

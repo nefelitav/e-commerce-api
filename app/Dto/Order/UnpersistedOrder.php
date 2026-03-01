@@ -2,6 +2,8 @@
 
 namespace App\Dto\Order;
 
+use App\Enums\OrderStatus;
+
 final readonly class UnpersistedOrder
 {
     /**
@@ -9,7 +11,7 @@ final readonly class UnpersistedOrder
      */
     public function __construct(
         public int $userId,
-        public string $status,
+        public OrderStatus $status,
         public float $totalPrice,
         public array $items = [],
     ) {}
@@ -20,8 +22,8 @@ final readonly class UnpersistedOrder
     public function toArray(): array
     {
         return [
-            'user_id' => $this->userId,
-            'status' => $this->status,
+            'user_id'     => $this->userId,
+            'status'      => $this->status->value,
             'total_price' => $this->totalPrice,
         ];
     }
@@ -41,11 +43,10 @@ final readonly class UnpersistedOrder
         }
 
         return new self(
-            $data['user_id'],
-            $data['status'],
-            (float) $data['total_price'],
-            $items,
+            userId:     $data['user_id'],
+            status:     OrderStatus::from($data['status']),
+            totalPrice: (float) $data['total_price'],
+            items:      $items,
         );
     }
 }
-

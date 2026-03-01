@@ -14,15 +14,30 @@ class DeleteOrderControllerTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_delete_order_successfully(): void
+    public function test_unauthenticated_returns_401(): void
+    {
+        $order = OrderModel::factory()->create();
+        $response = $this->deleteJson(route('v1.orders.destroy', ['id' => $order->id]));
+        $response->assertStatus(Response::HTTP_UNAUTHORIZED);
+    }
+
+    public function test_regular_user_returns_403(): void
     {
         $user = UserModel::factory()->create();
         $this->actingAs($user);
 
-        $order = OrderModel::factory()->create([
-            'user_id' => $user->id,
-        ]);
+        $order = OrderModel::factory()->create(['user_id' => $user->id]);
 
+        $response = $this->deleteJson(route('v1.orders.destroy', ['id' => $order->id]));
+        $response->assertStatus(Response::HTTP_FORBIDDEN);
+    }
+
+    public function test_admin_can_delete_order(): void
+    {
+        $admin = UserModel::factory()->admin()->create();
+        $this->actingAs($admin);
+
+        $order = OrderModel::factory()->create();
         $product = ProductModel::factory()->create();
 
         OrderItemModel::factory()->create([
@@ -33,15 +48,14 @@ class DeleteOrderControllerTest extends TestCase
         $response = $this->deleteJson(route('v1.orders.destroy', ['id' => $order->id]));
 
         $response->assertStatus(Response::HTTP_NO_CONTENT);
-
         $this->assertDatabaseMissing('orders', ['id' => $order->id]);
         $this->assertDatabaseMissing('order_items', ['order_id' => $order->id]);
     }
 
     public function test_delete_nonexistent_order_returns_422(): void
     {
-        $user = UserModel::factory()->create();
-        $this->actingAs($user);
+        $admin = UserModel::factory()->admin()->create();
+        $this->actingAs($admin);
 
         $response = $this->deleteJson(route('v1.orders.destroy', ['id' => 999999]));
 

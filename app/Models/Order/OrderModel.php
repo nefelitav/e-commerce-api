@@ -2,6 +2,7 @@
 
 namespace App\Models\Order;
 
+use App\Enums\OrderStatus;
 use App\Models\CreatedAtUtcTrait;
 use App\Models\UpdatedAtUtcTrait;
 use App\Models\UserModel;
@@ -11,12 +12,14 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Carbon;
 
 /**
  * @property int $id
  * @property int $user_id
- * @property string $status
+ * @property OrderStatus $status
  * @property float $total_price
+ * @property Carbon|null $created_at
  * @property UserModel $user
  * @property Collection<int, OrderItemModel> $items
  * @method static static create(array<mixed> $attributes = [])
@@ -35,6 +38,16 @@ class OrderModel extends Model
         'status',
         'total_price',
     ];
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function casts(): array
+    {
+        return [
+            'status' => OrderStatus::class,
+        ];
+    }
 
     /**
      * @return BelongsTo<UserModel, $this>

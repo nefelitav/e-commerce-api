@@ -13,10 +13,25 @@ class CreateProductControllerTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_create_product_successfully(): void
+    public function test_unauthenticated_returns_401(): void
+    {
+        $response = $this->postJson(route('v1.products.store'), []);
+        $response->assertStatus(Response::HTTP_UNAUTHORIZED);
+    }
+
+    public function test_regular_user_returns_403(): void
     {
         $user = UserModel::factory()->create();
         $this->actingAs($user);
+
+        $response = $this->postJson(route('v1.products.store'), []);
+        $response->assertStatus(Response::HTTP_FORBIDDEN);
+    }
+
+    public function test_create_product_successfully(): void
+    {
+        $admin = UserModel::factory()->admin()->create();
+        $this->actingAs($admin);
 
         $category = CategoryModel::factory()->create();
 
@@ -55,8 +70,8 @@ class CreateProductControllerTest extends TestCase
 
     public function test_create_product_fails_validation(): void
     {
-        $user = UserModel::factory()->create();
-        $this->actingAs($user);
+        $admin = UserModel::factory()->admin()->create();
+        $this->actingAs($admin);
 
         $payload = [
             'price' => 1000,
@@ -70,8 +85,8 @@ class CreateProductControllerTest extends TestCase
 
     public function test_create_product_fails_when_product_already_exists(): void
     {
-        $user = UserModel::factory()->create();
-        $this->actingAs($user);
+        $admin = UserModel::factory()->admin()->create();
+        $this->actingAs($admin);
 
         $category = CategoryModel::factory()->create();
 

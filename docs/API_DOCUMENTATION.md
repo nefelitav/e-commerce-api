@@ -32,7 +32,73 @@ http://localhost:8000/api/v1/
 ```
 
 ### Authentication
-Currently, the API does not require authentication. Future versions will include OAuth2 or JWT.
+
+The API uses Laravel's session/token-based authentication. Requests are authenticated by passing a valid session cookie or Bearer token issued at login.
+
+```
+Authorization: Bearer <token>
+Content-Type: application/json
+Accept: application/json
+```
+
+### Roles
+
+| Role | Description |
+|------|-------------|
+| **Guest** | Unauthenticated — no token required |
+| **User** | Authenticated regular customer |
+| **Admin** | Authenticated user with `role = admin` |
+
+### Access Control (RBAC)
+
+| Endpoint | Guest | User | Admin |
+|----------|:-----:|:----:|:-----:|
+| **Products** |
+| `GET /products` | ✅ | ✅ | ✅ |
+| `GET /products/{id}` | ✅ | ✅ | ✅ |
+| `POST /products` | ❌ | ❌ | ✅ |
+| `PUT /products/{id}` | ❌ | ❌ | ✅ |
+| `DELETE /products/{id}` | ❌ | ❌ | ✅ |
+| `GET /products/{id}/inventory-history` | ❌ | ❌ | ✅ |
+| **Categories** |
+| `GET /categories` | ✅ | ✅ | ✅ |
+| `GET /categories/{id}` | ✅ | ✅ | ✅ |
+| `GET /categories/{id}/subcategories` | ✅ | ✅ | ✅ |
+| `POST /categories` | ❌ | ❌ | ✅ |
+| `PUT /categories/{id}` | ❌ | ❌ | ✅ |
+| `DELETE /categories/{id}` | ❌ | ❌ | ✅ |
+| **Orders** |
+| `GET /orders` | ❌ | ✅ own only | ✅ all |
+| `GET /orders/{id}` | ❌ | ✅ own only | ✅ any |
+| `POST /orders` | ❌ | ✅ | ✅ |
+| `PUT /orders/{id}` | ❌ | ✅ own + restricted | ✅ unrestricted |
+| `DELETE /orders/{id}` | ❌ | ❌ | ✅ |
+| **Carts** |
+| `GET /carts` | ❌ | ❌ | ✅ |
+| `GET /carts/{id}` | ✅ | ✅ | ✅ |
+| `POST /carts` | ✅ | ✅ | ✅ |
+| `PUT /carts/{id}` | ✅ | ✅ | ✅ |
+| `DELETE /carts/{id}` | ✅ | ✅ | ✅ |
+
+### Auth Error Responses
+
+**`401 Unauthorized`** — request is not authenticated:
+```json
+{
+  "success": false,
+  "message": "Unauthenticated.",
+  "error": "Unauthorized"
+}
+```
+
+**`403 Forbidden`** — authenticated but insufficient role:
+```json
+{
+  "success": false,
+  "message": "You do not have permission to perform this action.",
+  "error": "Forbidden"
+}
+```
 
 ### Common Headers
 ```
@@ -104,34 +170,34 @@ Accept: application/json
 
 ### All Available Endpoints
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
+| Method | Endpoint | Auth Required | Description |
+|--------|----------|---------------|-------------|
 | **PRODUCTS** |
-| GET | `/products` | List all products |
-| GET | `/products/{id}` | Get single product |
-| POST | `/products` | Create product |
-| PUT | `/products/{id}` | Update product |
-| DELETE | `/products/{id}` | Delete product |
-| GET | `/products/{id}/inventory-history` | Product inventory history |
+| GET | `/products` | — | List all products |
+| GET | `/products/{id}` | — | Get single product |
+| POST | `/products` | Admin | Create product |
+| PUT | `/products/{id}` | Admin | Update product |
+| DELETE | `/products/{id}` | Admin | Delete product |
+| GET | `/products/{id}/inventory-history` | Admin | Product inventory history |
 | **CATEGORIES** |
-| GET | `/categories` | List all categories |
-| GET | `/categories/{id}` | Get single category |
-| POST | `/categories` | Create category |
-| PUT | `/categories/{id}` | Update category |
-| DELETE | `/categories/{id}` | Delete category |
-| GET | `/categories/{id}/subcategories` | List subcategories |
+| GET | `/categories` | — | List all categories |
+| GET | `/categories/{id}` | — | Get single category |
+| GET | `/categories/{id}/subcategories` | — | List subcategories |
+| POST | `/categories` | Admin | Create category |
+| PUT | `/categories/{id}` | Admin | Update category |
+| DELETE | `/categories/{id}` | Admin | Delete category |
 | **ORDERS** |
-| GET | `/orders` | List all orders |
-| GET | `/orders/{id}` | Get single order |
-| POST | `/orders` | Create order |
-| PUT | `/orders/{id}` | Update order |
-| DELETE | `/orders/{id}` | Delete order |
+| GET | `/orders` | User / Admin | List orders (users see own only) |
+| GET | `/orders/{id}` | User / Admin | Get order (users see own only) |
+| POST | `/orders` | User / Admin | Place order |
+| PUT | `/orders/{id}` | User / Admin | Update order (users: restricted transitions) |
+| DELETE | `/orders/{id}` | Admin | Delete order |
 | **CARTS** |
-| GET | `/carts` | List all carts |
-| GET | `/carts/{id}` | Get single cart |
-| POST | `/carts` | Create cart |
-| PUT | `/carts/{id}` | Update cart |
-| DELETE | `/carts/{id}` | Delete cart |
+| GET | `/carts` | Admin | List all carts |
+| GET | `/carts/{id}` | — | Get single cart |
+| POST | `/carts` | — | Create cart |
+| PUT | `/carts/{id}` | — | Update cart |
+| DELETE | `/carts/{id}` | — | Delete cart |
 
 ---
 
@@ -478,6 +544,10 @@ GET /api/v1/categories/{id}/subcategories
 GET /api/v1/orders
 ```
 
+**Auth:** User or Admin (required)
+
+> **Scoping:** Regular users only receive their own orders. Admins receive all orders. The `user_id` filter is automatically injected for non-admin requests and cannot be overridden.
+
 **Query Parameters:**
 ```
 page=1                              (optional, default: 1)
@@ -504,14 +574,20 @@ GET /api/v1/orders?filter[status]=pending&filter[min_total]=100&sort=created_at&
 GET /api/v1/orders/{id}
 ```
 
+**Auth:** User or Admin (required)
+
+> **Ownership:** Regular users receive `400 Bad Request` if the order does not belong to them. Admins can retrieve any order.
+
 **Status Code:** `200 OK`
 
 ---
 
-### Create Order
+### Create Order (Place Order)
 ```
 POST /api/v1/orders
 ```
+
+**Auth:** User or Admin (required)
 
 **Request Body:**
 ```json
@@ -522,13 +598,42 @@ POST /api/v1/orders
     {
       "product_id": 1,
       "quantity": 2,
-      "price": 99.99
+      "unit_price": 99.99
     }
   ]
 }
 ```
 
+**Validation Rules:**
+- `status` — Required, one of: `pending`, `paid`, `shipped`, `delivered`, `cancelled`, `refunded`
+- `total_price` — Required, numeric, min: 0
+- `items` — Required, array, min 1 item
+- `items.*.product_id` — Required, integer, must exist in products table
+- `items.*.quantity` — Required, integer, min: 1, max: 10000
+- `items.*.unit_price` — Required, numeric, min: 0
+
+**Inventory side-effect:**
+
+Placing an order **atomically deducts stock** for every item inside a single database transaction:
+
+1. Each product row is locked with `SELECT … FOR UPDATE` to prevent overselling under concurrent requests.
+2. Available stock is validated against the requested quantity.
+3. The product `quantity` column is decremented.
+4. An `inventory_history` record with `change_type = sale` is written.
+5. The order and its items are inserted.
+
+If any product has insufficient stock the entire transaction is rolled back and no order is created.
+
 **Status Code:** `201 Created`
+
+**Error — Insufficient stock (`400 Bad Request`):**
+```json
+{
+  "success": false,
+  "message": "Insufficient stock for product 1: requested 5, available 2.",
+  "error": "Bad Request"
+}
+```
 
 ---
 
@@ -537,15 +642,67 @@ POST /api/v1/orders
 PUT /api/v1/orders/{id}
 ```
 
+**Auth:** User or Admin (required)
+
+> **Ownership:** Regular users receive `400 Bad Request` if the order does not belong to them.
+
+#### Status Machine
+
+All status updates — user and admin alike — are validated by `OrderStatusMachine`.
+
+**Regular users** may only perform:
+
+| From | To | Extra condition |
+|------|----|-----------------|
+| `pending` | `cancelled` | Must be within **24 hours** of order creation |
+
+**Admins** may perform any transition in the full lifecycle:
+
+| From | To |
+|------|----|
+| `pending` | `paid`, `cancelled` |
+| `paid` | `shipped`, `refunded` |
+| `shipped` | `delivered` |
+| `delivered` | `refunded` |
+| `cancelled` | *(terminal)* |
+| `refunded` | *(terminal)* |
+
+Attempting an invalid transition (including skipping steps or moving out of a terminal status) throws `InvalidOrderStateException` → `400 Bad Request` for both roles.
+
 **Request Body:**
 ```json
 {
-  "status": "completed",
-  "total_price": 299.99
+  "status": "cancelled",
+  "total_price": 299.99,
+  "items": [
+    {
+      "product_id": 1,
+      "quantity": 2,
+      "unit_price": 99.99
+    }
+  ]
 }
 ```
 
 **Status Code:** `200 OK`
+
+**Error — Invalid transition (`400 Bad Request`):**
+```json
+{
+  "success": false,
+  "message": "Transition from 'pending' to 'shipped' is not allowed.",
+  "error": "Bad Request"
+}
+```
+
+**Error — Cancellation window expired (`400 Bad Request`):**
+```json
+{
+  "success": false,
+  "message": "Orders can only be cancelled within 24 hours of creation.",
+  "error": "Bad Request"
+}
+```
 
 ---
 
@@ -554,7 +711,9 @@ PUT /api/v1/orders/{id}
 DELETE /api/v1/orders/{id}
 ```
 
-**Status Code:** `200 OK`
+**Auth:** Admin only
+
+**Status Code:** `204 No Content`
 
 ---
 
@@ -652,9 +811,12 @@ DELETE /api/v1/carts/{id}
 |------|---------|---------|
 | 200 | OK | Successfully retrieved/updated resource |
 | 201 | Created | Resource created successfully |
-| 400 | Bad Request | Invalid query parameters |
-| 404 | Not Found | Resource doesn't exist |
+| 204 | No Content | Resource deleted successfully |
+| 400 | Bad Request | Business rule violation (e.g. insufficient stock, invalid order transition) |
+| 401 | Unauthorized | Request is not authenticated |
+| 403 | Forbidden | Authenticated but insufficient role |
 | 422 | Unprocessable Entity | Validation failed |
+| 429 | Too Many Requests | Rate limit exceeded |
 | 500 | Server Error | Internal server error |
 
 ### Error Response Examples

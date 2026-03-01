@@ -12,10 +12,25 @@ class CreateCategoryControllerTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_create_category_successfully(): void
+    public function test_unauthenticated_returns_401(): void
+    {
+        $response = $this->postJson(route('v1.categories.store'), []);
+        $response->assertStatus(Response::HTTP_UNAUTHORIZED);
+    }
+
+    public function test_regular_user_returns_403(): void
     {
         $user = UserModel::factory()->create();
         $this->actingAs($user);
+
+        $response = $this->postJson(route('v1.categories.store'), []);
+        $response->assertStatus(Response::HTTP_FORBIDDEN);
+    }
+
+    public function test_create_category_successfully(): void
+    {
+        $admin = UserModel::factory()->admin()->create();
+        $this->actingAs($admin);
 
         $payload = [
             'name' => 'New Category',
@@ -28,12 +43,7 @@ class CreateCategoryControllerTest extends TestCase
         $response->assertStatus(Response::HTTP_CREATED)
             ->assertJsonStructure([
                 'success',
-                'data' => [
-                    'id',
-                    'name',
-                    'description',
-                    'parent_id',
-                ],
+                'data' => ['id', 'name', 'description', 'parent_id'],
             ]);
 
         $this->assertDatabaseHas('categories', [
@@ -45,14 +55,10 @@ class CreateCategoryControllerTest extends TestCase
 
     public function test_create_category_fails_validation(): void
     {
-        $user = UserModel::factory()->create();
-        $this->actingAs($user);
+        $admin = UserModel::factory()->admin()->create();
+        $this->actingAs($admin);
 
-        $payload = [
-            'description' => 'Some description',
-        ];
-
-        $response = $this->postJson(route('v1.categories.store'), $payload);
+        $response = $this->postJson(route('v1.categories.store'), ['description' => 'Some description']);
 
         $response->assertStatus(Response::HTTP_UNPROCESSABLE_ENTITY);
         $response->assertJsonValidationErrors('name');
@@ -60,8 +66,8 @@ class CreateCategoryControllerTest extends TestCase
 
     public function test_create_category_with_parent(): void
     {
-        $user = UserModel::factory()->create();
-        $this->actingAs($user);
+        $admin = UserModel::factory()->admin()->create();
+        $this->actingAs($admin);
 
         $parentCategory = CategoryModel::factory()->create();
 
@@ -74,9 +80,7 @@ class CreateCategoryControllerTest extends TestCase
         $response = $this->postJson(route('v1.categories.store'), $payload);
 
         $response->assertStatus(Response::HTTP_CREATED)
-            ->assertJsonFragment([
-                'parent_id' => $parentCategory->id,
-            ]);
+            ->assertJsonFragment(['parent_id' => $parentCategory->id]);
 
         $this->assertDatabaseHas('categories', [
             'name' => 'Child Category',

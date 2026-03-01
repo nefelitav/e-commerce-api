@@ -6,8 +6,11 @@
 3. [Request Flow](#request-flow)
 4. [Layer Responsibilities](#layer-responsibilities)
 5. [Data Flow](#data-flow)
-6. [Error Handling](#error-handling)
-7. [Extension Points](#extension-points)
+6. [RBAC & Middleware](#rbac--middleware)
+7. [Order Placement & Inventory](#order-placement--inventory)
+8. [Order Status Machine](#order-status-machine)
+9. [Error Handling](#error-handling)
+10. [Extension Points](#extension-points)
 
 ---
 
@@ -690,7 +693,257 @@ DELETE /api/v1/products/1
 
 ---
 
-## Error Handling
+## RBAC & Middleware
+
+### Roles
+
+The `users` table has a `role` column (`enum: user | admin`, default: `user`).  
+`UserModel::isAdmin()` returns `true` when `role === 'admin'`.
+
+### Middleware
+
+| Alias | Class | Behaviour |
+|-------|-------|-----------|
+| `auth.required` | `App\Http\Middleware\RequireAuth` | Returns `401` if the request has no authenticated user |
+| `admin.required` | `App\Http\Middleware\RequireAdmin` | Returns `401` if unauthenticated, `403` if authenticated but not admin |
+
+Both aliases are registered in `bootstrap/app.php`.
+
+### Route Groups
+
+```
+routes/api.php
+├── Public (no middleware)
+│   ├── GET /products, GET /products/{id}
+│   ├── GET /categories, GET /categories/{id}, GET /categories/{id}/subcategories
+│   └── GET|POST|PUT|DELETE /carts/{id}, POST /carts
+│
+├── auth.required
+│   ├── POST   /orders          (place order)
+│   ├── GET    /orders          (scoped to own orders for non-admins)
+│   ├── GET    /orders/{id}     (own order only for non-admins)
+│   └── PUT    /orders/{id}     (restricted transitions for non-admins)
+│
+└── admin.required
+    ├── POST|PUT|DELETE /products
+    ├── GET /products/{id}/inventory-history
+    ├── POST|PUT|DELETE /categories
+    ├── DELETE /orders/{id}
+    └── GET /carts
+```
+
+### Controller-level Ownership Checks
+
+Routes under `auth.required` apply further checks inside the controller to enforce resource ownership:
+
+- **`GetOrderController`** — regular users receive `400 Bad Request` if `order.user_id ≠ auth.id`.
+- **`UpdateOrderController`** — regular users receive `400 Bad Request` if `order.user_id ≠ auth.id`.
+- **`ListOrdersController`** — the `user_id` filter is silently injected for non-admin requests so users can never retrieve another user's orders.
+
+---
+
+## Order Placement & Inventory
+
+Placing an order (`POST /orders`) is not just a record insert — it **atomically updates stock** for every ordered item.
+
+### Flow
+
+```
+POST /api/v1/orders
+{
+  "status": "pending",
+  "total_price": 199.98,
+  "items": [
+    { "product_id": 1, "quantity": 2, "unit_price": 99.99 }
+  ]
+}
+
+↓ auth.required middleware (401 if unauthenticated)
+
+↓ CreateOrderRequest (validates fields, checks product IDs exist)
+
+↓ CreateOrderController::store()
+
+↓ OrderService::createOrder(UnpersistedOrder)
+  DB::transaction {
+    for each item:
+      1. ProductRepository::findByIdForUpdate(productId)
+         → SELECT ... FOR UPDATE   (pessimistic write lock)
+         → throws ProductNotFoundException if product missing
+
+      2. Check previousQuantity >= item.quantity
+         → throws InsufficientStockException if not enough stock
+
+      3. ProductModel::update(['quantity' => newQuantity])
+         → decrements product stock in-place
+
+      4. InventoryHistoryRepository::record(
+           change_type   = 'sale',
+           quantity_changed = -item.quantity,
+           previous_quantity = previousQuantity,
+           new_quantity  = newQuantity,
+         )
+
+    5. OrderRepository::persist(UnpersistedOrder)
+       → inserts order + order_items rows
+
+    commit (or rollback everything on any failure)
+  }
+
+↓ HTTP 201 Created
+```
+
+### Why a single transaction?
+
+All five steps above run inside one `DB::transaction`. If any product has insufficient stock or any insert fails, the entire transaction is rolled back — no partial orders, no phantom stock decrements.
+
+### Pessimistic locking
+
+`ProductRepository::findByIdForUpdate` issues a `SELECT … FOR UPDATE` lock. This serialises concurrent `POST /orders` requests for the same product, eliminating the race condition where two requests both read the same available quantity and both believe they can fulfil the order.
+
+### Inventory history
+
+Every stock movement is recorded in `inventory_history`:
+
+| Event | `change_type` | `quantity_changed` |
+|-------|---------------|--------------------|
+| Product created | `addition` | `+initialQty` |
+| Admin adjusts quantity | `adjustment` | `±delta` |
+| Order placed | `sale` | `-orderedQty` |
+
+---
+
+## Order Status Machine
+
+`app/Services/Order/OrderStatusMachine.php`
+
+### Why a dedicated class?
+
+The transition rules are domain logic — they belong neither in the controller (HTTP layer) nor in the repository (persistence layer). Extracting them into their own class gives us:
+
+- **Single responsibility** — `OrderService` orchestrates, `OrderStatusMachine` decides what is allowed.
+- **Testability** — the machine can be unit-tested in complete isolation from the database, HTTP stack, or any other service.
+- **Replaceability** — swap transition rules (e.g. add a `hold` status, change the cancellation window) in exactly one file without touching anything else.
+- **Mockability** — `OrderService` tests mock the machine, so they never need to reproduce the full transition graph; the machine tests own that coverage.
+
+### Order lifecycle
+
+```
+                  ┌──────────┐
+         ┌────────│  pending  │──────────────────────┐
+         │        └──────────┘                        │
+         │ (admin) paid          (admin/user*) cancelled
+         ▼                                            ▼
+    ┌─────────┐                              ┌─────────────┐
+    │  paid   │                              │  cancelled  │ ◄─ terminal
+    └─────────┘                              └─────────────┘
+     │       │
+     │       │ (admin) refunded
+     │       ▼
+     │   ┌──────────┐
+     │   │ refunded │ ◄─ terminal
+     │   └──────────┘
+     │
+     │ (admin) shipped
+     ▼
+┌──────────┐
+│ shipped  │
+└──────────┘
+     │
+     │ (admin) delivered
+     ▼
+┌───────────┐
+│ delivered │
+└───────────┘
+     │
+     │ (admin) refunded
+     ▼
+┌──────────┐
+│ refunded │ ◄─ terminal
+└──────────┘
+```
+
+*`pending → cancelled` is only permitted for regular users within **24 hours** of order creation.
+
+### Two rule sets, two methods
+
+The machine exposes two methods with different levels of permission:
+
+#### `assertUserTransitionAllowed(Order $existing, OrderStatus $newStatus)`
+
+Enforces what a **regular customer** may request. Currently only one transition is permitted:
+
+| From | To | Extra condition |
+|------|----|-----------------|
+| `pending` | `cancelled` | Must be within 24 hours of `created_at` |
+
+Any other transition throws `InvalidOrderStateException` → `400 Bad Request`.
+
+#### `assertAdminTransitionAllowed(Order $existing, OrderStatus $newStatus)`
+
+Enforces the **complete lifecycle** for operators. Every valid transition:
+
+| From | To |
+|------|----|
+| `pending` | `paid`, `cancelled` |
+| `paid` | `shipped`, `refunded` |
+| `shipped` | `delivered` |
+| `delivered` | `refunded` |
+| `cancelled` | *(terminal — no outgoing transitions)* |
+| `refunded` | *(terminal — no outgoing transitions)* |
+
+Admins go through the machine too — they are not exempt. This means attempting to skip a step (e.g. `paid → delivered`) or resurrect a terminal order (`cancelled → pending`) throws the same `InvalidOrderStateException`.
+
+### Class anatomy
+
+```php
+class OrderStatusMachine
+{
+    // ── constants ──────────────────────────────────────────────────────────
+    private const CANCELLATION_WINDOW_HOURS = 24;
+
+    // Indexed by current status value; value is the list of permitted targets.
+    private const USER_ALLOWED_TRANSITIONS  = [ ... ];
+    private const ADMIN_ALLOWED_TRANSITIONS = [ ... ];
+
+    // ── public API ─────────────────────────────────────────────────────────
+    public function assertUserTransitionAllowed(Order $existing, OrderStatus $newStatus): void
+    public function assertAdminTransitionAllowed(Order $existing, OrderStatus $newStatus): void
+}
+```
+
+Both methods throw `InvalidOrderStateException` on violation and return `void` on success — the "tell, don't ask" pattern.
+
+### Integration
+
+```
+PUT /api/v1/orders/{id}
+
+UpdateOrderController::executeRequest()
+  ├── 1. Auth / ownership check (non-admin users only)
+  ├── 2. Resolve isAdmin = auth()->user()->isAdmin()
+  └── OrderService::updateOrder(id, unpersisted, asAdmin: isAdmin)
+        ├── 3. OrderRepository::findById(id)           ← always fetches existing order
+        ├── 4a. if asAdmin  → statusMachine::assertAdminTransitionAllowed(existing, newStatus)
+        │   4b. if !asAdmin → statusMachine::assertUserTransitionAllowed(existing, newStatus)
+        │         └── also checks 24-hour cancellation window
+        └── 5. OrderRepository::update(id, unpersisted)
+```
+
+`OrderService` always fetches the existing order (step 3) regardless of role — both rule sets need the current status to validate the transition.
+
+### Adding a new transition
+
+1. Add the new `OrderStatus` case to `app/Enums/OrderStatus.php` if needed.
+2. Add the transition to `ADMIN_ALLOWED_TRANSITIONS` (and `USER_ALLOWED_TRANSITIONS` if customers should also trigger it).
+3. Add a migration if the `status` column type needs updating.
+4. Add a test case to `tests/Unit/Services/OrderStatusMachineTest.php`.
+
+No other file needs to change.
+
+---
+
+
 
 ### Exception Hierarchy
 
@@ -703,6 +956,7 @@ Exception
 ├── OrderNotFoundException
 ├── CartNotFoundException
 ├── InsufficientStockException
+├── InvalidOrderStateException
 ├── BadRequestException
 ├── UnprocessableEntityException
 └── ValidationException (Laravel)

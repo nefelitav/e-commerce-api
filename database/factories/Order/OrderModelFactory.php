@@ -2,6 +2,7 @@
 
 namespace Database\Factories\Order;
 
+use App\Enums\OrderStatus;
 use App\Models\Order\OrderModel;
 use App\Models\UserModel;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -23,7 +24,7 @@ class OrderModelFactory extends Factory
     {
         return [
             'user_id' => UserModel::factory(),
-            'status' => $this->faker->randomElement(['pending', 'paid', 'shipped', 'cancelled']),
+            'status' => $this->faker->randomElement(OrderStatus::cases())->value,
             'total_price' => $this->faker->randomFloat(2, 1, 5000),
         ];
     }

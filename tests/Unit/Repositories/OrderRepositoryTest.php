@@ -4,6 +4,7 @@ namespace Tests\Unit\Repositories;
 
 use App\Dto\Order\UnpersistedOrder;
 use App\Dto\Order\UnpersistedOrderItem;
+use App\Enums\OrderStatus;
 use App\Exceptions\OrderNotFoundException;
 use App\Models\Order\OrderItemModel;
 use App\Models\Order\OrderModel;
@@ -68,7 +69,7 @@ class OrderRepositoryTest extends TestCase
 
         $dto = new UnpersistedOrder(
             userId: $user->id,
-            status: 'pending',
+            status: OrderStatus::Pending,
             totalPrice: 1999,
             items: [
                 new UnpersistedOrderItem(
@@ -115,7 +116,7 @@ class OrderRepositoryTest extends TestCase
 
         $dto = new UnpersistedOrder(
             userId: $user->id,
-            status: 'paid',
+            status: OrderStatus::Paid,
             totalPrice: 200,
             items: [
                 new UnpersistedOrderItem(
@@ -128,7 +129,7 @@ class OrderRepositoryTest extends TestCase
 
         $result = $this->repository->update($order->id, $dto);
 
-        $this->assertEquals('paid', $result->status);
+        $this->assertEquals(OrderStatus::Paid, $result->status);
         $this->assertDatabaseHas('orders', [
             'id' => $order->id,
             'status' => 'paid',
@@ -155,7 +156,7 @@ class OrderRepositoryTest extends TestCase
 
         $dto = new UnpersistedOrder(
             userId: $user->id,
-            status: 'paid',
+            status: OrderStatus::Paid,
             totalPrice: 200,
             items: [],
         );

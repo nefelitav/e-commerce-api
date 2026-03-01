@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1\Order;
 
 use App\Dto\Order\UnpersistedOrder;
 use App\Exceptions\BadRequestException;
+use App\Exceptions\InvalidOrderStateException;
 use App\Exceptions\OrderNotFoundException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Order\UpdateOrderRequest;
@@ -44,11 +45,19 @@ final readonly class UpdateOrderController extends Controller
                 throw new BadRequestException();
             }
 
+            $user = $request->user();
+            $isAdmin = $user !== null && $user->isAdmin();
+
+            // A regular user may only update their own order.
+            if (!$isAdmin && ($user === null || $existing->userId !== $user->id)) {
+                throw new BadRequestException('You do not have access to this order.');
+            }
+
             $validatedData['user_id'] = $validatedData['user_id'] ?? $existing->userId;
             $unpersistedOrder = UnpersistedOrder::fromArray($validatedData);
 
-            $updatedOrder = $this->service->updateOrder($validatedData['id'], $unpersistedOrder);
-        } catch (OrderNotFoundException $e) {
+            $updatedOrder = $this->service->updateOrder($validatedData['id'], $unpersistedOrder, asAdmin: $isAdmin);
+        } catch (InvalidOrderStateException|OrderNotFoundException $e) {
             throw new BadRequestException($e);
         }
 

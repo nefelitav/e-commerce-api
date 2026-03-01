@@ -48,6 +48,11 @@ final readonly class GetOrderController extends Controller
             throw new BadRequestException();
         }
 
+        $user = $request->user();
+        if ($user !== null && !$user->isAdmin() && $order->userId !== $user->id) {
+            throw new BadRequestException('You do not have access to this order.');
+        }
+
         $foundOrder = $this->transformer->transform($order);
         $this->logger->info("Order found.", ["order" => $foundOrder]);
 

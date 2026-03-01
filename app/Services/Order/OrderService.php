@@ -6,6 +6,7 @@ use App\Dto\InventoryHistory\UnpersistedInventoryHistoryEntry;
 use App\Dto\Order\Order;
 use App\Dto\Order\UnpersistedOrder;
 use App\Exceptions\InsufficientStockException;
+use App\Exceptions\InvalidOrderStateException;
 use App\Exceptions\OrderNotFoundException;
 use App\Exceptions\ProductNotFoundException;
 use App\Repositories\InventoryHistory\InventoryHistoryRepository;
@@ -20,6 +21,7 @@ final readonly class OrderService
         private OrderRepository $repository,
         private ProductRepository $productRepository,
         private InventoryHistoryRepository $inventoryHistoryRepository,
+        private OrderStatusMachine $statusMachine,
     ) {
     }
 
@@ -44,14 +46,6 @@ final readonly class OrderService
         return $this->repository->findById($id);
     }
 
-    /**
-     * Places an order, deducting stock for each item atomically.
-     *
-     * For every item in the order the product row is locked (FOR UPDATE),
-     * stock availability is validated, and — once all items pass — the
-     * product quantities are decremented and inventory history entries are
-     * recorded, all within a single DB transaction.
-     */
     public function createOrder(UnpersistedOrder $unpersistedOrder): Order
     {
         /** @var Order $order */
@@ -62,8 +56,6 @@ final readonly class OrderService
              */
             function () use ($unpersistedOrder) {
                 foreach ($unpersistedOrder->items as $item) {
-                    // Acquire a pessimistic write lock to prevent overselling under
-                    // concurrent requests for the same product.
                     $productModel = $this->productRepository->findByIdForUpdate($item->productId);
 
                     if ($productModel === null) {
@@ -102,9 +94,22 @@ final readonly class OrderService
 
     /**
      * @throws OrderNotFoundException
+     * @throws InvalidOrderStateException
      */
-    public function updateOrder(int $id, UnpersistedOrder $unpersistedOrder): Order
+    public function updateOrder(int $id, UnpersistedOrder $unpersistedOrder, bool $asAdmin = false): Order
     {
+        $existing = $this->repository->findById($id);
+
+        if ($existing === null) {
+            throw new OrderNotFoundException($id);
+        }
+
+        if ($asAdmin) {
+            $this->statusMachine->assertAdminTransitionAllowed($existing, $unpersistedOrder->status);
+        } else {
+            $this->statusMachine->assertUserTransitionAllowed($existing, $unpersistedOrder->status);
+        }
+
         return $this->repository->update($id, $unpersistedOrder);
     }
 
@@ -116,4 +121,3 @@ final readonly class OrderService
         return $this->repository->delete($id);
     }
 }
-

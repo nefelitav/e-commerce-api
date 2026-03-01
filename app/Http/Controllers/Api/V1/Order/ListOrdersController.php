@@ -30,6 +30,12 @@ final readonly class ListOrdersController extends Controller
         /** @var array<string, mixed> $validated */
         $validated = $request->validated();
 
+        // Non-admin users may only see their own orders.
+        $user = $request->user();
+        if ($user !== null && !$user->isAdmin()) {
+            $validated['filter']['user_id'] = $user->id;
+        }
+
         $listOrdersResponse = $this->executeRequest(
             $validated['page'],
             $validated['per_page'],

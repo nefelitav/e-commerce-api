@@ -271,25 +271,8 @@ final class Order {
 - [ ] Documentation updated (if applicable)
 
 ## Documentation Policy
-
-### When to Update `docs/`
-**UPDATE docs when:**
-- ✅ Adding new features or functionality
-- ✅ Modifying existing features or workflows
-- ✅ Changing API endpoints or behavior
-- ✅ Updating architecture or design patterns
-- ✅ Adding new exceptions or error scenarios
-- ✅ Changes affect users or developers integrating with the system
-
-### When NOT to Update `docs/`
-**DO NOT create/update docs for:**
-- ❌ Bug fixes that don't change behavior
-- ❌ Internal refactoring (same external behavior)
-- ❌ Code style improvements
-- ❌ Performance optimizations (unless user-facing)
-- ❌ Test updates
-- ❌ Routine task completion or maintenance
-- ❌ Internal implementation details that don't affect usage
+Don't forget to always update documentation when new features or behavior has been added.
+Avoid adding comments, make code self-explanatory instead. Only add comments when the code is doing something non-obvious that a future developer might not understand without context. For example, if there's a complex product query with multiple joins and filters, a comment explaining the intent and logic can be helpful. But for straightforward code, rely on clear naming and structure to communicate intent.
 
 ### Documentation Files to Update
 When updating docs, ensure you cover:

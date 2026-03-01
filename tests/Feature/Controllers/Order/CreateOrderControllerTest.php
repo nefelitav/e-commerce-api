@@ -12,6 +12,12 @@ class CreateOrderControllerTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_unauthenticated_returns_401(): void
+    {
+        $response = $this->postJson(route('v1.orders.store'), []);
+        $response->assertStatus(Response::HTTP_UNAUTHORIZED);
+    }
+
     public function test_create_order_successfully(): void
     {
         $user = UserModel::factory()->create();

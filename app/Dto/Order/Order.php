@@ -2,6 +2,7 @@
 
 namespace App\Dto\Order;
 
+use App\Enums\OrderStatus;
 use App\Models\Order\OrderModel;
 
 final readonly class Order
@@ -12,8 +13,9 @@ final readonly class Order
     public function __construct(
         public int $id,
         public int $userId,
-        public string $status,
+        public OrderStatus $status,
         public float $totalPrice,
+        public string $createdAt,
         public array $items = [],
     ) {}
 
@@ -27,11 +29,12 @@ final readonly class Order
         }
 
         return new self(
-            $order->id,
-            $order->user_id,
-            $order->status,
-            $order->total_price,
-            $items,
+            id: $order->id,
+            userId: $order->user_id,
+            status: $order->status,
+            totalPrice: $order->total_price,
+            createdAt: (string) $order->created_at,
+            items: $items,
         );
     }
 }

@@ -34,6 +34,14 @@ class Handler extends ExceptionHandler
             ], Response::HTTP_UNPROCESSABLE_ENTITY);
         }
 
+        if ($e instanceof InvalidOrderStateException) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+                'error' => 'Invalid Order State',
+            ], Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
+
         return parent::render($request, $e);
     }
 }
