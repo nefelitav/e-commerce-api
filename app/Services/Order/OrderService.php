@@ -15,7 +15,7 @@ use App\Repositories\Product\ProductRepository;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 
-final readonly class OrderService
+final readonly class OrderService implements OrderServiceInterface
 {
     public function __construct(
         private OrderRepository $repository,

@@ -13,7 +13,7 @@ use App\Repositories\Product\ProductRepository;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 
-final readonly class ProductService
+final readonly class ProductService implements ProductServiceInterface
 {
     public function __construct(
         private ProductRepository $repository,

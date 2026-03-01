@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers\Api\V1\Order;
+namespace App\Http\Controllers\Api\V1\Admin\Order;
 
 use App\CQRS\CommandBus;
 use App\CQRS\Commands\Order\CreateOrderCommand;
@@ -11,7 +11,7 @@ use App\Exceptions\BadRequestException;
 use App\Exceptions\InsufficientStockException;
 use App\Exceptions\ProductNotFoundException;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Order\CreateOrderRequest;
+use App\Http\Requests\Admin\Order\AdminCreateOrderRequest;
 use App\Http\Responses\ApiResponse;
 use App\Http\Responses\Order\CreateOrderResponse;
 use App\Transformers\OrderTransformer;
@@ -19,7 +19,7 @@ use Illuminate\Http\JsonResponse;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Log\Logger;
 
-final readonly class CreateOrderController extends Controller
+final readonly class AdminCreateOrderController extends Controller
 {
     use ApiResponse;
 
@@ -29,15 +29,10 @@ final readonly class CreateOrderController extends Controller
         private Logger           $logger,
     ) {}
 
-    public function store(CreateOrderRequest $request): JsonResponse
+    public function store(AdminCreateOrderRequest $request): JsonResponse
     {
         /** @var array<string, mixed> $validated */
         $validated = $request->validated();
-
-        $userId = $request->user()->id ?? ($validated['user_id'] ?? null);
-        if ($userId === null) {
-            throw new BadRequestException('User is required to create an order');
-        }
 
         /** @var array<int, array<string, mixed>> $rawItems */
         $rawItems = $validated['items'];
@@ -52,7 +47,7 @@ final readonly class CreateOrderController extends Controller
         );
 
         $command = new CreateOrderCommand(
-            userId:     (int)   $userId,
+            userId:     (int)   $validated['user_id'],
             status:     OrderStatus::from($validated['status']),
             totalPrice: (float) $validated['total_price'],
             items:      $items,
@@ -66,8 +61,9 @@ final readonly class CreateOrderController extends Controller
         }
 
         $orderData = $this->transformer->transform($order);
-        $this->logger->info('New order created.', ['order' => $orderData]);
+        $this->logger->info('Admin created order via command bus.', ['order' => $orderData]);
 
         return self::success(new CreateOrderResponse($orderData), Response::HTTP_CREATED);
     }
 }
+

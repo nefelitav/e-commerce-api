@@ -322,6 +322,103 @@ class ProductTransformer
 
 ---
 
+### 6. **CQRS Command Bus Pattern**
+
+**Purpose:** Decouple write *intent* from its execution inside the existing endpoints
+
+**Location:** `app/CQRS/`
+
+```
+app/CQRS/
+├── CommandBus.php                          # Resolves and dispatches to handler
+├── Commands/
+│   ├── CommandInterface.php               # Marker interface for all commands
+│   ├── Product/
+│   │   └── CreateProductCommand.php       # Immutable value object
+│   └── Order/
+│       ├── CreateOrderCommand.php
+│       └── CreateOrderCommandItem.php
+└── Handlers/
+    ├── CommandHandlerInterface.php        # Contract for all handlers
+    ├── Product/
+    │   └── CreateProductCommandHandler.php
+    └── Order/
+        └── CreateOrderCommandHandler.php
+```
+
+**How it works — using the existing endpoints:**
+
+```
+POST /api/v1/products          (existing, admin.required middleware)
+POST /api/v1/orders            (existing, auth.required middleware)
+```
+
+1. A request hits the existing `CreateProductController` / `CreateOrderController` — **no new routes**.
+2. The controller constructs an immutable **Command** value object from the validated request.
+3. It calls `CommandBus::dispatch($command)`.
+4. The bus resolves the registered **Handler** from the container and calls `handle($command)`.
+5. The handler delegates to the **Service** layer — no business logic lives in the handler itself.
+
+**Service interfaces:** `ProductServiceInterface` and `OrderServiceInterface` are bound in `AppServiceProvider` so the container can inject them into handlers (and so tests can mock them without fighting `final`).
+
+**Adding a new command:**
+
+1. Add `app/CQRS/Commands/<Domain>/MyCommand.php` (implements `CommandInterface`)
+2. Add `app/CQRS/Handlers/<Domain>/MyCommandHandler.php` (implements `CommandHandlerInterface`)
+3. Register in `AppServiceProvider`: `MyCommand::class => MyCommandHandler::class`
+4. Inject `CommandBus` into the relevant **existing** controller and dispatch
+
+---
+
+### 5. **Form Request Pattern**
+
+**Purpose:** Decouple admin write intentions from their execution
+
+**Location:** `app/CQRS/`
+
+```
+app/CQRS/
+├── CommandBus.php                          # Resolves and dispatches to handler
+├── Commands/
+│   ├── CommandInterface.php               # Marker interface for all commands
+│   ├── Product/
+│   │   └── CreateProductCommand.php       # Immutable value object
+│   └── Order/
+│       ├── CreateOrderCommand.php
+│       └── CreateOrderCommandItem.php
+└── Handlers/
+    ├── CommandHandlerInterface.php        # Contract for all handlers
+    ├── Product/
+    │   └── CreateProductCommandHandler.php
+    └── Order/
+        └── CreateOrderCommandHandler.php
+```
+
+**How it works:**
+
+1. An admin HTTP request hits an `Admin*Controller` under `Api/V1/Admin/`.
+2. The controller constructs an immutable **Command** value object from the validated request.
+3. The controller calls `CommandBus::dispatch($command)`.
+4. The bus resolves the registered **Handler** from the Laravel container and calls `handle($command)`.
+5. The handler delegates to the existing **Service** layer — no business logic lives in the handler itself.
+
+**Admin routes** (all under `admin.required` middleware):
+
+| Method | URI | Name |
+|--------|-----|------|
+| `POST` | `/api/v1/admin/products` | `v1.admin.products.store` |
+| `POST` | `/api/v1/admin/orders` | `v1.admin.orders.store` |
+
+**Service interfaces:** `ProductServiceInterface` and `OrderServiceInterface` are bound in `AppServiceProvider` so the container can inject them into handlers. The concrete `ProductService` / `OrderService` classes implement these interfaces — no changes to existing service behaviour.
+
+**Benefits:**
+- Admin intent is explicit and auditable (each command is a named, typed object)
+- Handlers are thin bridges — business logic stays in services
+- Easy to extend: add a command + handler + route, nothing else changes
+- Fully testable: handlers mock the service interface; feature tests hit the full stack
+
+---
+
 ### 5. **Form Request Pattern**
 
 **Purpose:** Validate and normalize input
@@ -725,7 +822,7 @@ routes/api.php
 │   └── PUT    /orders/{id}     (restricted transitions for non-admins)
 │
 └── admin.required
-    ├── POST|PUT|DELETE /products
+    ├── POST|PUT|DELETE /products    (CreateProductController now dispatches CreateProductCommand)
     ├── GET /products/{id}/inventory-history
     ├── POST|PUT|DELETE /categories
     ├── DELETE /orders/{id}
@@ -997,6 +1094,44 @@ class ProductNotFoundException extends Exception
 ---
 
 ## Extension Points
+
+### Adding a New CQRS Command
+
+The system uses a lightweight **CQRS command bus** for admin write operations. Adding a new command requires four steps:
+
+1. **Create the command** — an immutable value object in `app/CQRS/Commands/<Domain>/`:
+   ```php
+   final readonly class PublishProductCommand implements CommandInterface
+   {
+       public function __construct(public int $productId) {}
+   }
+   ```
+
+2. **Create the handler** — in `app/CQRS/Handlers/<Domain>/`:
+   ```php
+   readonly class PublishProductCommandHandler implements CommandHandlerInterface
+   {
+       public function __construct(private ProductServiceInterface $productService) {}
+
+       public function handle(CommandInterface $command): Product
+       {
+           return $this->productService->publishProduct($command->productId);
+       }
+   }
+   ```
+
+3. **Register in `AppServiceProvider`** — add to the `CommandBus` handler map:
+   ```php
+   PublishProductCommand::class => PublishProductCommandHandler::class,
+   ```
+
+4. **Add the admin route** in `routes/api.php` under the `admin.required` group:
+   ```php
+   Route::post('admin/products/{id}/publish', [AdminPublishProductController::class, 'store'])
+       ->name('v1.admin.products.publish');
+   ```
+
+---
 
 ### Adding a New Resource
 

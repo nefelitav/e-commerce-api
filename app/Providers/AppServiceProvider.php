@@ -2,10 +2,19 @@
 
 namespace App\Providers;
 
+use App\CQRS\CommandBus;
+use App\CQRS\Commands\Order\CreateOrderCommand;
+use App\CQRS\Commands\Product\CreateProductCommand;
+use App\CQRS\Handlers\Order\CreateOrderCommandHandler;
+use App\CQRS\Handlers\Product\CreateProductCommandHandler;
 use App\Http\Middleware\RequireAdmin;
 use App\Http\Middleware\RequireAuth;
 use App\Repositories\Category\CategoryRepository;
 use App\Services\Category\CategoryService;
+use App\Services\Order\OrderService;
+use App\Services\Order\OrderServiceInterface;
+use App\Services\Product\ProductService;
+use App\Services\Product\ProductServiceInterface;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Router;
@@ -19,6 +28,19 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->app->singleton(CategoryRepository::class);
         $this->app->singleton(CategoryService::class);
+
+        $this->app->bind(ProductServiceInterface::class, ProductService::class);
+        $this->app->bind(OrderServiceInterface::class, OrderService::class);
+
+        $this->app->singleton(CommandBus::class, function ($app) {
+            return new CommandBus(
+                container: $app,
+                handlers: [
+                    CreateProductCommand::class => CreateProductCommandHandler::class,
+                    CreateOrderCommand::class   => CreateOrderCommandHandler::class,
+                ],
+            );
+        });
     }
 
     public function boot(): void
