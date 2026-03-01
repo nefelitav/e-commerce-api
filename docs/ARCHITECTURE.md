@@ -171,26 +171,53 @@ class ProductService
         private InventoryHistoryRepository $inventoryHistoryRepository,
     ) {}
 
-    public function listProducts(
-        int $page = 1,
-        int $perPage = 15,
-        string $sort = 'id',
-        string $order = 'asc',
-        array $filters = [],
-        array $includes = []
-    ): LengthAwarePaginator {
-        return $this->repository->getAll($page, $perPage, $sort, $order, $filters, $includes);
-    }
-
     public function createProduct(UnpersistedProduct $unpersistedProduct): Product
     {
-        $existing = $this->repository->findByName($unpersistedProduct->name);
-        
-        if ($existing) {
-            throw new ProductAlreadyExistsException($unpersistedProduct->name);
-        }
-        
-        return $this->repository->persist($unpersistedProduct);
+        return DB::transaction(function () use ($unpersistedProduct) {
+            $existing = $this->repository->findByName($unpersistedProduct->name);
+
+            if ($existing) {
+                throw new ProductAlreadyExistsException($unpersistedProduct->name);
+            }
+
+            $created = $this->repository->persist($unpersistedProduct);
+
+            // Record initial stock addition atomically with the insert.
+            $this->inventoryHistoryRepository->record(new UnpersistedInventoryHistoryEntry(
+                productId: $created->id,
+                changeType: 'addition',
+                quantityChanged: $created->quantity,
+                previousQuantity: 0,
+                newQuantity: $created->quantity,
+            ));
+
+            return $created;
+        });
+    }
+
+    public function updateProduct(int $id, UnpersistedProduct $unpersistedProduct): Product
+    {
+        return DB::transaction(function () use ($id, $unpersistedProduct) {
+            // Acquire a pessimistic write lock to prevent concurrent
+            // updates from causing stock inconsistencies.
+            $lockedModel = $this->repository->findByIdForUpdate($id);
+
+            if ($lockedModel === null) {
+                throw new ProductNotFoundException($id);
+            }
+
+            if ($unpersistedProduct->quantity < 0) {
+                throw new InsufficientStockException($id, $unpersistedProduct->quantity, $lockedModel->quantity);
+            }
+
+            $updated = $this->repository->update($id, $unpersistedProduct);
+
+            if ($updated->quantity !== $lockedModel->quantity) {
+                $this->inventoryHistoryRepository->record(/* ... */);
+            }
+
+            return $updated;
+        });
     }
 }
 ```
@@ -555,22 +582,24 @@ POST /api/v1/products
 ↓ CreateProductController::store()
 
 ↓ ProductService::createProduct(UnpersistedProduct)
-  - Check if product already exists
-  - Throw exception if duplicate
-  - Call repository
+  - Opens DB transaction
+  - Checks for duplicate name (throws ProductAlreadyExistsException)
+  - Calls repository to persist product
+  - Records initial stock addition in inventory_history
+  - Commits transaction (or rolls back on failure)
 
 ↓ ProductRepository::persist(UnpersistedProduct)
-  - Create ProductModel
-  - Save to database
-  - Transform to Product DTO
+  - Creates ProductModel
+  - Saves to database
+  - Returns Product DTO
 
 ↓ ProductTransformer::transform(Product)
-  - Convert DTO to array
+  - Converts DTO to array
 
 ↓ CreateProductResponse
-  - Wrap in response format
-  - Add success flag
-  - Add message
+  - Wraps in response format
+  - Adds success flag
+  - Adds message
 
 ↓ HTTP 201 Created
 {
@@ -614,7 +643,8 @@ GET /api/v1/products/1
 PUT /api/v1/products/1
 {
   "name": "Updated Name",
-  "price": 149.99
+  "price": 149.99,
+  "quantity": 20
 }
 
 ↓ UpdateProductRequest (validates)
@@ -622,12 +652,22 @@ PUT /api/v1/products/1
 ↓ UpdateProductController::update()
 
 ↓ ProductService::updateProduct(1, UnpersistedProduct)
+  - Opens DB transaction
+  - Calls repository::findByIdForUpdate(1) — acquires FOR UPDATE row lock
+  - Validates new quantity >= 0 (throws InsufficientStockException otherwise)
+  - Calls repository::update(1, UnpersistedProduct)
+  - If quantity changed, records adjustment in inventory_history
+  - Commits transaction (or rolls back on failure)
+
+↓ ProductRepository::findByIdForUpdate(1)
+  - Asserts an active transaction exists
+  - SELECT ... FOR UPDATE (pessimistic write lock)
+  - Returns locked ProductModel
 
 ↓ ProductRepository::update(1, UnpersistedProduct)
-  - Find existing product
-  - Update attributes
-  - Save to database
-  - Transform to DTO
+  - Wrapped in its own DB transaction with lockForUpdate
+  - Updates attributes and saves
+  - Returns updated Product DTO
 
 ↓ HTTP 200 OK
 ```
@@ -662,6 +702,7 @@ Exception
 ├── CategoryAlreadyExistsException
 ├── OrderNotFoundException
 ├── CartNotFoundException
+├── InsufficientStockException
 ├── BadRequestException
 ├── UnprocessableEntityException
 └── ValidationException (Laravel)
@@ -796,7 +837,14 @@ class ProductNotFoundException extends Exception
 - Handle exceptions at controller level
 - Return consistent error responses
 
-### 6. Testing
+### 6. Concurrency & Inventory Locking
+- All inventory mutations (create, update) run inside `DB::transaction`
+- `ProductRepository::findByIdForUpdate` issues a `SELECT ... FOR UPDATE` (pessimistic write lock) to serialize concurrent stock changes
+- The method asserts it is called inside an active transaction (`DB::transactionLevel() > 0`)
+- `InsufficientStockException` is thrown when a requested quantity would result in a negative stock level
+- Both the service-level outer transaction and the repository-level inner transaction use `lockForUpdate`, ensuring correctness whether `update` is called directly or via the service
+
+### 7. Testing
 - Test services with mocked repositories
 - Test controllers with fixtures
 - Test repositories with test database

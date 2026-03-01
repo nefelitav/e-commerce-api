@@ -6,6 +6,7 @@ use App\Dto\InventoryHistory\InventoryHistoryEntry;
 use App\Dto\InventoryHistory\UnpersistedInventoryHistoryEntry;
 use App\Dto\Product\Product;
 use App\Dto\Product\UnpersistedProduct;
+use App\Exceptions\InsufficientStockException;
 use App\Exceptions\ProductAlreadyExistsException;
 use App\Exceptions\ProductNotFoundException;
 use App\Models\InventoryHistory\InventoryHistoryModel;
@@ -148,24 +149,29 @@ class ProductServiceTest extends TestCase
         $this->assertSame($persistedProduct, $result);
     }
 
-    public function test_updateProduct_calls_repository_update(): void
+    public function test_updateProduct_calls_repository_update_without_history_when_quantity_unchanged(): void
     {
         $id = 1;
+        $quantity = 5;
+
         $unpersisted = new UnpersistedProduct(
             name: 'Updated Product',
             description: 'desc',
             price: 100,
-            quantity: 1,
+            quantity: $quantity,
             categoryId: 1,
         );
 
-        $updatedProduct = Product::fromModel(ProductModel::factory()->create());
+        /** @var ProductModel $lockedModel */
+        $lockedModel = ProductModel::factory()->create(['quantity' => $quantity]);
+
+        $updatedProduct = Product::fromModel($lockedModel);
 
         $this->repository
             ->expects($this->once())
-            ->method('findById')
+            ->method('findByIdForUpdate')
             ->with($id)
-            ->willReturn($updatedProduct);
+            ->willReturn($lockedModel);
 
         $this->repository
             ->expects($this->once())
@@ -182,6 +188,81 @@ class ProductServiceTest extends TestCase
         $this->assertSame($updatedProduct, $result);
     }
 
+    public function test_updateProduct_records_inventory_history_when_quantity_changes(): void
+    {
+        $id = 1;
+
+        $unpersisted = new UnpersistedProduct(
+            name: 'Updated Product',
+            description: 'desc',
+            price: 100,
+            quantity: 20,
+            categoryId: 1,
+        );
+
+        /** @var ProductModel $lockedModel */
+        $lockedModel = ProductModel::factory()->create(['quantity' => 10]);
+
+        $updatedProduct = Product::fromModel(ProductModel::factory()->create(['quantity' => 20]));
+
+        $this->repository
+            ->expects($this->once())
+            ->method('findByIdForUpdate')
+            ->with($id)
+            ->willReturn($lockedModel);
+
+        $this->repository
+            ->expects($this->once())
+            ->method('update')
+            ->with($id, $unpersisted)
+            ->willReturn($updatedProduct);
+
+        $this->inventoryHistoryRepository
+            ->expects($this->once())
+            ->method('record')
+            ->with($this->callback(function (UnpersistedInventoryHistoryEntry $entry) {
+                return $entry->changeType === 'adjustment'
+                    && $entry->previousQuantity === 10
+                    && $entry->newQuantity === 20
+                    && $entry->quantityChanged === 10;
+            }))
+            ->willReturn(InventoryHistoryEntry::fromModel(InventoryHistoryModel::factory()->create()));
+
+        $result = $this->service->updateProduct($id, $unpersisted);
+
+        $this->assertSame($updatedProduct, $result);
+    }
+
+    public function test_updateProduct_throws_InsufficientStockException_when_quantity_is_negative(): void
+    {
+        $id = 1;
+
+        $unpersisted = new UnpersistedProduct(
+            name: 'Updated Product',
+            description: 'desc',
+            price: 100,
+            quantity: -1,
+            categoryId: 1,
+        );
+
+        /** @var ProductModel $lockedModel */
+        $lockedModel = ProductModel::factory()->create(['quantity' => 5]);
+
+        $this->repository
+            ->expects($this->once())
+            ->method('findByIdForUpdate')
+            ->with($id)
+            ->willReturn($lockedModel);
+
+        $this->repository
+            ->expects($this->never())
+            ->method('update');
+
+        $this->expectException(InsufficientStockException::class);
+
+        $this->service->updateProduct($id, $unpersisted);
+    }
+
     public function test_updateProduct_throws_ProductNotFoundException(): void
     {
         $id = 1;
@@ -195,7 +276,7 @@ class ProductServiceTest extends TestCase
 
         $this->repository
             ->expects($this->once())
-            ->method('findById')
+            ->method('findByIdForUpdate')
             ->with($id)
             ->willReturn(null);
 

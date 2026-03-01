@@ -8,6 +8,7 @@ use App\Exceptions\ProductNotFoundException;
 use App\Models\Product\ProductModel;
 use Illuminate\Support\Collection;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\DB;
 
 class ProductRepository
 {
@@ -87,6 +88,25 @@ class ProductRepository
         return $product ? Product::fromModel($product) : null;
     }
 
+    /**
+     * Fetch a product row with a pessimistic write lock (FOR UPDATE).
+     */
+    public function findByIdForUpdate(int $id): ?ProductModel
+    {
+        assert(
+            DB::transactionLevel() > 0,
+            'findByIdForUpdate must be called inside a DB transaction.'
+        );
+
+        /** @var ProductModel|null $product */
+        $product = ProductModel::query()
+            ->where('id', $id)
+            ->lockForUpdate()
+            ->first();
+
+        return $product;
+    }
+
     public function findByName(string $name): ?Product
     {
         /** @var ProductModel|null $productModel */
@@ -108,18 +128,23 @@ class ProductRepository
      */
     public function update(int $id, UnpersistedProduct $unpersistedProduct): Product
     {
-        /** @var ProductModel|null $productModel */
-        $productModel = ProductModel::query()->where('id', $id)->first();
+        /** @var Product $updated */
+        $updated = DB::transaction(function () use ($id, $unpersistedProduct) {
+            /** @var ProductModel|null $productModel */
+            $productModel = ProductModel::query()->where('id', $id)->lockForUpdate()->first();
 
-        if (!$productModel) {
-            throw new ProductNotFoundException($id);
-        }
+            if (!$productModel) {
+                throw new ProductNotFoundException($id);
+            }
 
-        $productModel->update($unpersistedProduct->toArray());
+            $productModel->update($unpersistedProduct->toArray());
 
-        $productModel->refresh();
+            $productModel->refresh();
 
-        return Product::fromModel($productModel);
+            return Product::fromModel($productModel);
+        });
+
+        return $updated;
     }
 
     /**

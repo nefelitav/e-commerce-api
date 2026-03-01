@@ -4,12 +4,14 @@ namespace App\Services\Product;
 
 use App\Dto\Product\Product;
 use App\Dto\Product\UnpersistedProduct;
+use App\Exceptions\InsufficientStockException;
 use App\Exceptions\ProductAlreadyExistsException;
 use App\Exceptions\ProductNotFoundException;
 use App\Repositories\InventoryHistory\InventoryHistoryRepository;
 use App\Dto\InventoryHistory\UnpersistedInventoryHistoryEntry;
 use App\Repositories\Product\ProductRepository;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\DB;
 
 final readonly class ProductService
 {
@@ -48,52 +50,77 @@ final readonly class ProductService
         return $this->repository->findById($id);
     }
 
-    /**
-     * @throws ProductAlreadyExistsException
-     */
     public function createProduct(UnpersistedProduct $unpersistedProduct): Product
     {
-        $existing = $this->repository->findByName($unpersistedProduct->name);
+        /** @var Product $created */
+        $created = DB::transaction(
+            /**
+             * @throws ProductAlreadyExistsException
+             */
+            function () use ($unpersistedProduct) {
+                $existing = $this->repository->findByName($unpersistedProduct->name);
 
-        if ($existing) {
-            throw new ProductAlreadyExistsException($unpersistedProduct->name);
-        }
+                if ($existing) {
+                    throw new ProductAlreadyExistsException($unpersistedProduct->name);
+                }
 
-        $created = $this->repository->persist($unpersistedProduct);
+                $created = $this->repository->persist($unpersistedProduct);
 
-        // Record initial stock addition.
-        $this->inventoryHistoryRepository->record(new UnpersistedInventoryHistoryEntry(
-            productId: $created->id,
-            changeType: 'addition',
-            quantityChanged: $created->quantity,
-            previousQuantity: 0,
-            newQuantity: $created->quantity,
-        ));
+                // Record initial stock addition.
+                $this->inventoryHistoryRepository->record(new UnpersistedInventoryHistoryEntry(
+                    productId: $created->id,
+                    changeType: 'addition',
+                    quantityChanged: $created->quantity,
+                    previousQuantity: 0,
+                    newQuantity: $created->quantity,
+                ));
+
+                return $created;
+            }
+        );
 
         return $created;
     }
 
-    /**
-     * @throws ProductNotFoundException
-     */
     public function updateProduct(int $id, UnpersistedProduct $unpersistedProduct): Product
     {
-        $existing = $this->repository->findById($id);
-        if ($existing === null) {
-            throw new ProductNotFoundException($id);
-        }
+        /** @var Product $updated */
+        $updated = DB::transaction(
+            /**
+             * @throws ProductNotFoundException
+             * @throws InsufficientStockException
+             */
+            function () use ($id, $unpersistedProduct) {
+                // Lock the product row for the duration of the transaction to
+                // prevent concurrent updates from causing stock inconsistencies.
+                $lockedModel = $this->repository->findByIdForUpdate($id);
 
-        $updated = $this->repository->update($id, $unpersistedProduct);
+                if ($lockedModel === null) {
+                    throw new ProductNotFoundException($id);
+                }
 
-        if ($updated->quantity !== $existing->quantity) {
-            $this->inventoryHistoryRepository->record(new UnpersistedInventoryHistoryEntry(
-                productId: $updated->id,
-                changeType: 'adjustment',
-                quantityChanged: $updated->quantity - $existing->quantity,
-                previousQuantity: $existing->quantity,
-                newQuantity: $updated->quantity,
-            ));
-        }
+                $previousQuantity = $lockedModel->quantity;
+                $newQuantity = $unpersistedProduct->quantity;
+    
+                if ($newQuantity < 0) {
+                    throw new InsufficientStockException($id, $newQuantity, $previousQuantity);
+                }
+
+                $updated = $this->repository->update($id, $unpersistedProduct);
+
+                if ($newQuantity !== $previousQuantity) {
+                    $this->inventoryHistoryRepository->record(new UnpersistedInventoryHistoryEntry(
+                        productId: $updated->id,
+                        changeType: 'adjustment',
+                        quantityChanged: $newQuantity - $previousQuantity,
+                        previousQuantity: $previousQuantity,
+                        newQuantity: $newQuantity,
+                    ));
+                }
+
+                return $updated;
+            }
+        );
 
         return $updated;
     }

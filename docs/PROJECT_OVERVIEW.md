@@ -68,6 +68,7 @@
 - ✅ Implement request validation
 - ✅ Create response standardization
 - ✅ Add error handling
+- ✅ Add pessimistic locking for inventory mutations (prevent overselling)
 
 ### Medium-term Goals
 - Implement authentication and authorization
@@ -167,8 +168,10 @@
 
 ### 5. **Inventory Management**
 - Track product quantities
-- Maintain inventory history
-- Update inventory on order
+- Maintain inventory history (additions and adjustments)
+- Pessimistic row-level locking (`SELECT ... FOR UPDATE`) prevents race conditions and overselling during concurrent stock updates
+- `InsufficientStockException` thrown when quantity would go negative
+- All stock mutations are wrapped in database transactions for atomicity
 
 ### 6. **Advanced Querying**
 - Multi-field filtering with AND logic
@@ -207,6 +210,7 @@ app/
 │   ├── CartNotFoundException.php
 │   ├── CategoryAlreadyExistsException.php
 │   ├── CategoryNotFoundException.php
+│   ├── InsufficientStockException.php
 │   ├── OrderNotFoundException.php
 │   ├── ProductAlreadyExistsException.php
 │   ├── ProductNotFoundException.php
