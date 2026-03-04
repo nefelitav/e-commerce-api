@@ -9,9 +9,12 @@ use App\Models\Category\CategoryModel;
 use Illuminate\Support\Collection;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection as LaravelCollection;
+use Illuminate\Support\Facades\Cache;
 
 class CategoryRepository
 {
+    private const TTL = 1800;
+
     /**
      * @param array<string, mixed> $filters
      * @param array<string> $includes
@@ -25,32 +28,36 @@ class CategoryRepository
         array $filters = [],
         array $includes = []
     ): LengthAwarePaginator {
-        $query = CategoryModel::query();
+        $cacheKey = 'categories.all.' . md5(serialize([$page, $perPage, $sort, $order, $filters, $includes]));
 
-        // Apply includes
-        if (!empty($includes)) {
-            $query->with($includes);
-        }
+        /** @var LengthAwarePaginator<int, Category> $result */
+        $result = Cache::tags(['categories'])->remember($cacheKey, self::TTL, function () use ($page, $perPage, $sort, $order, $filters, $includes) {
+            $query = CategoryModel::query();
 
-        // Apply filters
-        if (isset($filters['name'])) {
-            $query->where('name', 'like', '%' . $filters['name'] . '%');
-        }
-        if (isset($filters['parent_id'])) {
-            $query->where('parent_id', $filters['parent_id']);
-        }
+            if (!empty($includes)) {
+                $query->with($includes);
+            }
 
-        // Apply sorting
-        $query->orderBy($sort, $order);
+            if (isset($filters['name'])) {
+                $query->where('name', 'like', '%' . $filters['name'] . '%');
+            }
+            if (isset($filters['parent_id'])) {
+                $query->where('parent_id', $filters['parent_id']);
+            }
 
-        $paginator = $query->paginate($perPage, ['*'], 'page', $page);
+            $query->orderBy($sort, $order);
 
-        /** @var LaravelCollection<int, Category> $items */
-        $items = $paginator->getCollection()->map(fn($model) => Category::fromModel($model));
+            $paginator = $query->paginate($perPage, ['*'], 'page', $page);
 
-        $paginator->setCollection($items);
+            /** @var LaravelCollection<int, Category> $items */
+            $items = $paginator->getCollection()->map(fn($model) => Category::fromModel($model));
 
-        return $paginator;
+            $paginator->setCollection($items);
+
+            return $paginator;
+        });
+
+        return $result;
     }
 
     /**
@@ -58,33 +65,53 @@ class CategoryRepository
      */
     public function getSubcategoriesById(int $id): array
     {
-        $category = CategoryModel::with('children')->find($id);
+        $cacheKey = "categories.{$id}.children";
 
-        if (!$category) {
-            return [];
-        }
+        /** @var array<Category> $result */
+        $result = Cache::tags(['categories'])->remember($cacheKey, self::TTL, function () use ($id) {
+            $category = CategoryModel::with('children')->find($id);
 
-        /** @var Collection<int, CategoryModel> $children */
-        $children = $category->children()->get();
+            if (!$category) {
+                return [];
+            }
 
-        return $children
-            ->map(fn(CategoryModel $child) => Category::fromModel($child))
-            ->all();
+            /** @var Collection<int, CategoryModel> $children */
+            $children = $category->children()->get();
+
+            return $children
+                ->map(fn(CategoryModel $child) => Category::fromModel($child))
+                ->all();
+        });
+
+        return $result;
     }
-
 
     public function findById(int $id): ?Category
     {
-        $category = CategoryModel::with('children')->find($id);
+        $cacheKey = "categories.{$id}";
 
-        return $category ? Category::fromModel($category) : null;
+        /** @var Category|null $result */
+        $result = Cache::tags(['categories'])->remember($cacheKey, self::TTL, function () use ($id) {
+            $category = CategoryModel::with('children')->find($id);
+
+            return $category ? Category::fromModel($category) : null;
+        });
+
+        return $result;
     }
 
     public function findByName(string $name): ?Category
     {
-        $categoryModel = CategoryModel::query()->where('name', $name)->first();
+        $cacheKey = 'categories.name.' . md5($name);
 
-        return $categoryModel ? Category::fromModel($categoryModel) : null;
+        /** @var Category|null $result */
+        $result = Cache::tags(['categories'])->remember($cacheKey, self::TTL, function () use ($name) {
+            $categoryModel = CategoryModel::query()->where('name', $name)->first();
+
+            return $categoryModel ? Category::fromModel($categoryModel) : null;
+        });
+
+        return $result;
     }
 
     public function persist(UnpersistedCategory $unpersistedCategory): Category

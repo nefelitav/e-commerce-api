@@ -11,6 +11,7 @@ use App\Repositories\InventoryHistory\InventoryHistoryRepository;
 use App\Dto\InventoryHistory\UnpersistedInventoryHistoryEntry;
 use App\Repositories\Product\ProductRepository;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 final readonly class ProductService implements ProductServiceInterface
@@ -66,7 +67,6 @@ final readonly class ProductService implements ProductServiceInterface
 
                 $created = $this->repository->persist($unpersistedProduct);
 
-                // Record initial stock addition.
                 $this->inventoryHistoryRepository->record(new UnpersistedInventoryHistoryEntry(
                     productId: $created->id,
                     changeType: 'addition',
@@ -78,6 +78,8 @@ final readonly class ProductService implements ProductServiceInterface
                 return $created;
             }
         );
+
+        Cache::tags(['products'])->flush();
 
         return $created;
     }
@@ -122,6 +124,9 @@ final readonly class ProductService implements ProductServiceInterface
             }
         );
 
+        Cache::forget("products.{$id}");
+        Cache::tags(['products'])->flush();
+
         return $updated;
     }
 
@@ -130,6 +135,11 @@ final readonly class ProductService implements ProductServiceInterface
      */
     public function deleteProduct(int $id): bool
     {
-        return $this->repository->delete($id);
+        $result = $this->repository->delete($id);
+
+        Cache::forget("products.{$id}");
+        Cache::tags(['products'])->flush();
+
+        return $result;
     }
 }

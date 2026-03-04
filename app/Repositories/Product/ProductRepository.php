@@ -8,10 +8,13 @@ use App\Exceptions\ProductNotFoundException;
 use App\Models\Product\ProductModel;
 use Illuminate\Support\Collection;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 class ProductRepository
 {
+    private const TTL = 300;
+
     /**
      * @param array<string, mixed> $filters
      * @param array<string> $includes
@@ -25,44 +28,48 @@ class ProductRepository
         array $filters = [],
         array $includes = []
     ): LengthAwarePaginator {
-        $query = ProductModel::query();
+        $cacheKey = 'products.all.' . md5(serialize([$page, $perPage, $sort, $order, $filters, $includes]));
 
-        // Apply includes
-        if (!empty($includes)) {
-            $query->with($includes);
-        }
+        /** @var LengthAwarePaginator<int, Product> $result */
+        $result = Cache::tags(['products'])->remember($cacheKey, self::TTL, function () use ($page, $perPage, $sort, $order, $filters, $includes) {
+            $query = ProductModel::query();
 
-        // Apply filters
-        if (isset($filters['name'])) {
-            $query->where('name', 'like', '%' . $filters['name'] . '%');
-        }
-        if (isset($filters['category_id'])) {
-            $query->where('category_id', $filters['category_id']);
-        }
-        if (isset($filters['min_price'])) {
-            $query->where('price', '>=', $filters['min_price']);
-        }
-        if (isset($filters['max_price'])) {
-            $query->where('price', '<=', $filters['max_price']);
-        }
-        if (isset($filters['min_quantity'])) {
-            $query->where('quantity', '>=', $filters['min_quantity']);
-        }
-        if (isset($filters['max_quantity'])) {
-            $query->where('quantity', '<=', $filters['max_quantity']);
-        }
+            if (!empty($includes)) {
+                $query->with($includes);
+            }
 
-        // Apply sorting
-        $query->orderBy($sort, $order);
+            if (isset($filters['name'])) {
+                $query->where('name', 'like', '%' . $filters['name'] . '%');
+            }
+            if (isset($filters['category_id'])) {
+                $query->where('category_id', $filters['category_id']);
+            }
+            if (isset($filters['min_price'])) {
+                $query->where('price', '>=', $filters['min_price']);
+            }
+            if (isset($filters['max_price'])) {
+                $query->where('price', '<=', $filters['max_price']);
+            }
+            if (isset($filters['min_quantity'])) {
+                $query->where('quantity', '>=', $filters['min_quantity']);
+            }
+            if (isset($filters['max_quantity'])) {
+                $query->where('quantity', '<=', $filters['max_quantity']);
+            }
 
-        $paginator = $query->paginate($perPage, ['*'], 'page', $page);
+            $query->orderBy($sort, $order);
 
-        /** @var Collection<int, Product> $items */
-        $items = $paginator->getCollection()->map(fn($model) => Product::fromModel($model));
+            $paginator = $query->paginate($perPage, ['*'], 'page', $page);
 
-        $paginator->setCollection($items);
+            /** @var Collection<int, Product> $items */
+            $items = $paginator->getCollection()->map(fn($model) => Product::fromModel($model));
 
-        return $paginator;
+            $paginator->setCollection($items);
+
+            return $paginator;
+        });
+
+        return $result;
     }
 
     /**
@@ -70,22 +77,36 @@ class ProductRepository
      */
     public function findByCategoryId(int $categoryId): ?array
     {
-        /** @var Collection<int, ProductModel> $products */
-        $products = ProductModel::query()->where('category_id', $categoryId)->get();
+        $cacheKey = "products.category.{$categoryId}";
 
-        if ($products->isEmpty()) {
-            return [];
-        }
+        /** @var array<Product>|null $result */
+        $result = Cache::tags(['products'])->remember($cacheKey, self::TTL, function () use ($categoryId) {
+            /** @var Collection<int, ProductModel> $products */
+            $products = ProductModel::query()->where('category_id', $categoryId)->get();
 
-        return $products->map(fn(ProductModel $model) => Product::fromModel($model))->all();
+            if ($products->isEmpty()) {
+                return [];
+            }
+
+            return $products->map(fn(ProductModel $model) => Product::fromModel($model))->all();
+        });
+
+        return $result;
     }
 
     public function findById(int $id): ?Product
     {
-        /** @var ProductModel|null $product */
-        $product = ProductModel::find($id);
+        $cacheKey = "products.{$id}";
 
-        return $product ? Product::fromModel($product) : null;
+        /** @var Product|null $result */
+        $result = Cache::tags(['products'])->remember($cacheKey, self::TTL, function () use ($id) {
+            /** @var ProductModel|null $product */
+            $product = ProductModel::find($id);
+
+            return $product ? Product::fromModel($product) : null;
+        });
+
+        return $result;
     }
 
     /**

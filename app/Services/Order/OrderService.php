@@ -13,6 +13,7 @@ use App\Repositories\InventoryHistory\InventoryHistoryRepository;
 use App\Repositories\Order\OrderRepository;
 use App\Repositories\Product\ProductRepository;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 final readonly class OrderService implements OrderServiceInterface
@@ -88,6 +89,11 @@ final readonly class OrderService implements OrderServiceInterface
                 return $this->repository->persist($unpersistedOrder);
             }
         );
+
+        foreach ($unpersistedOrder->items as $item) {
+            Cache::forget("products.{$item->productId}");
+        }
+        Cache::tags(['products'])->flush();
 
         return $order;
     }

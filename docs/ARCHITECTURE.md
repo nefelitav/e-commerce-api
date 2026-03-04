@@ -9,8 +9,9 @@
 6. [RBAC & Middleware](#rbac--middleware)
 7. [Order Placement & Inventory](#order-placement--inventory)
 8. [Order Status Machine](#order-status-machine)
-9. [Error Handling](#error-handling)
-10. [Extension Points](#extension-points)
+9. [Caching](#caching)
+10. [Error Handling](#error-handling)
+11. [Extension Points](#extension-points)
 
 ---
 
@@ -1040,6 +1041,82 @@ No other file needs to change.
 
 ---
 
+## Caching
+
+The application uses Laravel's `Cache` facade with **tagged caching** to reduce database load for read-heavy, infrequently-mutated data. Cache invalidation is performed in the service layer after every successful write operation.
+
+### Configuration
+
+| Setting | Value | Notes |
+|---------|-------|-------|
+| Default store | `array` (in-memory) | Configured via `CACHE_STORE` env var |
+| Production recommendation | `redis` | Persists across requests, supports tags |
+| Config file | `config/cache.php` | `redis` store is pre-configured |
+
+The `array` driver stores cache in-memory for the lifetime of a single request/process. For cross-request caching in production, set `CACHE_STORE=redis` in `.env`.
+
+### What is cached
+
+#### Categories (tag: `categories`, TTL: 30 minutes)
+
+| Repository method | Cache key pattern | Cached? |
+|-------------------|-------------------|---------|
+| `getAll()` | `categories.all.{md5(params)}` | ✅ |
+| `findById()` | `categories.{id}` | ✅ |
+| `findByName()` | `categories.name.{md5(name)}` | ✅ |
+| `getSubcategoriesById()` | `categories.{id}.children` | ✅ |
+| `persist()` | — | ❌ |
+| `update()` | — | ❌ |
+| `delete()` | — | ❌ |
+
+**Invalidation:** `CategoryService` calls `Cache::tags(['categories'])->flush()` after `createCategory()`, `updateCategory()`, and `deleteCategory()`.
+
+#### Products (tag: `products`, TTL: 5 minutes)
+
+| Repository method | Cache key pattern | Cached? |
+|-------------------|-------------------|---------|
+| `getAll()` | `products.all.{md5(params)}` | ✅ |
+| `findById()` | `products.{id}` | ✅ |
+| `findByCategoryId()` | `products.category.{categoryId}` | ✅ |
+| `findByIdForUpdate()` | — | ❌ (pessimistic lock, must hit DB) |
+| `findByName()` | — | ❌ |
+| `persist()` | — | ❌ |
+| `update()` | — | ❌ |
+| `delete()` | — | ❌ |
+
+**Invalidation:**
+- `ProductService` calls `Cache::forget("products.{$id}")` + `Cache::tags(['products'])->flush()` after `updateProduct()` and `deleteProduct()`.
+- `ProductService` calls `Cache::tags(['products'])->flush()` after `createProduct()`.
+- `OrderService` calls `Cache::forget("products.{$id}")` for each ordered product + `Cache::tags(['products'])->flush()` after `createOrder()` (because order placement decrements stock).
+
+### What is NOT cached
+
+| Resource | Reason |
+|----------|--------|
+| **Carts** | Per-user, mutated on nearly every interaction, high invalidation complexity |
+| **Orders** | User-specific, real-time state changes, not publicly browsed |
+| **Inventory history** | Append-only log, typically only viewed by admins |
+| **`findByIdForUpdate()`** | Uses `SELECT … FOR UPDATE` pessimistic lock — must always hit the DB |
+
+### Cache key strategy
+
+List endpoints (`getAll`) accept dynamic parameters (page, perPage, sort, order, filters, includes). The cache key is built using `md5(serialize($params))` to produce a deterministic key per unique parameter combination without key explosion.
+
+### Invalidation strategy
+
+The application uses **tag-based cache flushing** rather than individual key deletion for list caches. When any write occurs:
+
+1. Specific item keys are forgotten via `Cache::forget("resource.{$id}")`
+2. The entire tag group is flushed via `Cache::tags(['resource'])->flush()`
+
+This ensures no stale list data is served, even when the exact list cache keys are unknown at invalidation time.
+
+### Important: cache is only flushed on success
+
+If a write operation throws an exception (e.g., `ProductAlreadyExistsException`, `CategoryNotFoundException`), the cache is **not** flushed — the data hasn't changed, so the cache remains valid.
+
+---
+
 
 
 ### Exception Hierarchy
@@ -1237,8 +1314,16 @@ The system uses a lightweight **CQRS command bus** for admin write operations. A
 - Test services with mocked repositories
 - Test controllers with fixtures
 - Test repositories with test database
+- Test caching behavior (cache hits, invalidation on writes, no-flush on errors)
 
-### 7. Code Organization
+### 8. Caching
+- Cache read-heavy, infrequently-mutated data (categories, products)
+- Use tagged caching for bulk invalidation
+- Invalidate in the service layer after successful writes only
+- Never cache data accessed with pessimistic locks (`findByIdForUpdate`)
+- Use short TTLs for data that changes with transactional operations (e.g. product stock)
+
+### 9. Code Organization
 - Keep files organized by resource
 - Use consistent naming conventions
 - Keep classes focused and single-responsibility

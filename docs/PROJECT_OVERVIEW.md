@@ -74,7 +74,6 @@
 - Implement authentication and authorization
 - Add advanced filtering (AND/OR logic)
 - Create audit logging
-- Add caching layer
 - Implement webhooks
 
 ### Long-term Goals
@@ -179,13 +178,20 @@
 - Pagination with configurable page size
 - Load related resources via includes
 
-### 7. **Standardized Responses**
+### 7. **Caching**
+- Tagged cache for categories (30-min TTL) and products (5-min TTL)
+- Automatic cache invalidation on create, update, and delete operations
+- Order placement invalidates product cache to reflect stock changes
+- Cache keys derived from query parameters via `md5(serialize())` for list endpoints
+- Configurable cache driver via `CACHE_STORE` env var (`array` for dev, `redis` for production)
+
+### 8. **Standardized Responses**
 - Consistent JSON format
 - Pagination metadata
 - Success/error indicators
 - Helpful messages
 
-### 8. **Request Validation**
+### 9. **Request Validation**
 - Validate all input parameters
 - Type checking (integer, string, numeric)
 - Range validation

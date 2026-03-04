@@ -8,6 +8,7 @@ use App\Exceptions\CategoryAlreadyExistsException;
 use App\Exceptions\CategoryNotFoundException;
 use App\Repositories\Category\CategoryRepository;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\Cache;
 
 final readonly class CategoryService
 {
@@ -56,7 +57,11 @@ final readonly class CategoryService
             throw new CategoryAlreadyExistsException($unpersistedCategory->name);
         }
 
-        return $this->repository->persist($unpersistedCategory);
+        $category = $this->repository->persist($unpersistedCategory);
+
+        Cache::tags(['categories'])->flush();
+
+        return $category;
     }
 
     /**
@@ -71,7 +76,11 @@ final readonly class CategoryService
             throw new CategoryAlreadyExistsException($unpersistedCategory->name);
         }
 
-        return $this->repository->update($id, $unpersistedCategory);
+        $category = $this->repository->update($id, $unpersistedCategory);
+
+        Cache::tags(['categories'])->flush();
+
+        return $category;
     }
 
     /**
@@ -79,6 +88,10 @@ final readonly class CategoryService
      */
     public function deleteCategory(int $id): bool
     {
-        return $this->repository->delete($id);
+        $result = $this->repository->delete($id);
+
+        Cache::tags(['categories'])->flush();
+
+        return $result;
     }
 }

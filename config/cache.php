@@ -15,7 +15,9 @@ return [
     |
     */
 
-    'default' => env('CACHE_STORE', 'database'),
+    // Use 'array' (in-memory, zero-infra) as the default for local/testing.
+    // Switch to 'redis' in production for persistence and tag support across processes.
+    'default' => env('CACHE_STORE', 'array'),
 
     /*
     |--------------------------------------------------------------------------
