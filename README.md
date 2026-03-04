@@ -51,11 +51,8 @@ Complete documentation is available in the `docs/` directory:
 ```mermaid
 classDiagram
     User "1" --> "0..*" Order : places
-    User "1" --> "1" Cart : owns
     Order "1" --> "1..*" OrderItem : contains
     Product "1" --> "0..*" OrderItem : appears_in
-    Cart "1" --> "0..*" CartItem : contains
-    Product "1" --> "0..*" CartItem : appears_in
     Product "1" --> "0..*" InventoryHistory : tracks
     Category "1" --> "0..*" Product : contains
     Category "0..1" --> "0..*" Category : parent
@@ -88,12 +85,6 @@ classDiagram
 - Filter by status or price range
 - Track order items
 - User-specific orders
-
-### Carts
-- Shopping cart management
-- Add/remove items
-- Quantity updates
-- User-specific carts
 
 ### Inventory History
 - Track stock changes

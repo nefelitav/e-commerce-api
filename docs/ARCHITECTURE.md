@@ -813,8 +813,7 @@ Both aliases are registered in `bootstrap/app.php`.
 routes/api.php
 ├── Public (no middleware)
 │   ├── GET /products, GET /products/{id}
-│   ├── GET /categories, GET /categories/{id}, GET /categories/{id}/subcategories
-│   └── GET|POST|PUT|DELETE /carts/{id}, POST /carts
+│   └── GET /categories, GET /categories/{id}, GET /categories/{id}/subcategories
 │
 ├── auth.required
 │   ├── POST   /orders          (place order)
@@ -826,8 +825,7 @@ routes/api.php
     ├── POST|PUT|DELETE /products    (CreateProductController now dispatches CreateProductCommand)
     ├── GET /products/{id}/inventory-history
     ├── POST|PUT|DELETE /categories
-    ├── DELETE /orders/{id}
-    └── GET /carts
+    └── DELETE /orders/{id}
 ```
 
 ### Controller-level Ownership Checks
@@ -1093,7 +1091,6 @@ The `array` driver stores cache in-memory for the lifetime of a single request/p
 
 | Resource | Reason |
 |----------|--------|
-| **Carts** | Per-user, mutated on nearly every interaction, high invalidation complexity |
 | **Orders** | User-specific, real-time state changes, not publicly browsed |
 | **Inventory history** | Append-only log, typically only viewed by admins |
 | **`findByIdForUpdate()`** | Uses `SELECT … FOR UPDATE` pessimistic lock — must always hit the DB |
@@ -1128,7 +1125,6 @@ Exception
 ├── CategoryNotFoundException
 ├── CategoryAlreadyExistsException
 ├── OrderNotFoundException
-├── CartNotFoundException
 ├── InsufficientStockException
 ├── InvalidOrderStateException
 ├── BadRequestException

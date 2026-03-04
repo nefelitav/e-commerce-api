@@ -13,13 +13,12 @@
 
 ## Project Description
 
-**Shop API** is a RESTful API built with Laravel 12 that provides a comprehensive e-commerce backend system. It manages products, categories, orders, carts, and inventory with advanced filtering, sorting, and pagination capabilities.
+**Shop API** is a RESTful API built with Laravel 12 that provides a comprehensive e-commerce backend system. It manages products, categories, orders, and inventory with advanced filtering, sorting, and pagination capabilities.
 
 ### Primary Purpose
 - Provide a robust backend for e-commerce applications
 - Handle product catalog management
 - Process orders and maintain inventory
-- Manage shopping carts and user interactions
 - Support complex queries with filtering and sorting
 
 ### Target Users
@@ -159,13 +158,7 @@
 - Track order items
 - Pagination support
 
-### 4. **Cart Management**
-- User-specific shopping carts
-- Add/remove items from cart
-- Sorted by creation date
-- Include cart items
-
-### 5. **Inventory Management**
+### 4. **Inventory Management**
 - Track product quantities
 - Maintain inventory history (additions and adjustments)
 - Pessimistic row-level locking (`SELECT ... FOR UPDATE`) prevents race conditions and overselling during concurrent stock updates
@@ -173,25 +166,26 @@
 - All stock mutations are wrapped in database transactions for atomicity
 
 ### 6. **Advanced Querying**
+### 5. **Advanced Querying**
 - Multi-field filtering with AND logic
 - Sort by any relevant field
 - Pagination with configurable page size
 - Load related resources via includes
 
-### 7. **Caching**
+### 6. **Caching**
 - Tagged cache for categories (30-min TTL) and products (5-min TTL)
 - Automatic cache invalidation on create, update, and delete operations
 - Order placement invalidates product cache to reflect stock changes
 - Cache keys derived from query parameters via `md5(serialize())` for list endpoints
 - Configurable cache driver via `CACHE_STORE` env var (`array` for dev, `redis` for production)
 
-### 8. **Standardized Responses**
+### 7. **Standardized Responses**
 - Consistent JSON format
 - Pagination metadata
 - Success/error indicators
 - Helpful messages
 
-### 9. **Request Validation**
+### 8. **Request Validation**
 - Validate all input parameters
 - Type checking (integer, string, numeric)
 - Range validation
@@ -206,14 +200,12 @@
 ```
 app/
 ├── Dto/                          # Data Transfer Objects
-│   ├── Cart/
 │   ├── Category/
 │   ├── InventoryHistory/
 │   ├── Order/
 │   └── Product/
 ├── Exceptions/                   # Custom Exceptions
 │   ├── BadRequestException.php
-│   ├── CartNotFoundException.php
 │   ├── CategoryAlreadyExistsException.php
 │   ├── CategoryNotFoundException.php
 │   ├── InsufficientStockException.php
@@ -224,18 +216,15 @@ app/
 ├── Http/
 │   ├── Controllers/              # API Controllers
 │   │   └── Api/V1/
-│   │       ├── Cart/
 │   │       ├── Category/
 │   │       ├── InventoryHistory/
 │   │       ├── Order/
 │   │       └── Product/
 │   ├── Requests/                 # Form Requests (Validation)
-│   │   ├── Cart/
 │   │   ├── Category/
 │   │   ├── Order/
 │   │   └── Product/
 │   └── Responses/                # Response Objects
-│       ├── Cart/
 │       ├── Category/
 │       ├── Order/
 │       └── Product/
@@ -243,25 +232,21 @@ app/
 │   ├── CreatedAtUtcTrait.php
 │   ├── UpdatedAtUtcTrait.php
 │   ├── UserModel.php
-│   ├── Cart/
 │   ├── Category/
 │   ├── InventoryHistory/
 │   ├── Order/
 │   └── Product/
 ├── Repositories/                 # Data Access Layer
-│   ├── Cart/
 │   ├── Category/
 │   ├── InventoryHistory/
 │   ├── Order/
 │   └── Product/
 ├── Services/                     # Business Logic Layer
-│   ├── Cart/
 │   ├── Category/
 │   ├── InventoryHistory/
 │   ├── Order/
 │   └── Product/
 ├── Transformers/                 # Response Transformation
-│   ├── CartTransformer.php
 │   ├── CategoryTransformer.php
 │   ├── InventoryHistoryTransformer.php
 │   ├── OrderTransformer.php
@@ -359,7 +344,7 @@ The API will be available at `http://localhost:8000/api/v1/`
 ## Project Statistics
 
 - **Controllers**: 20+ (CRUD operations for 5 resources)
-- **Models**: 5 core entities (Product, Category, Order, Cart, InventoryHistory)
+- **Models**: 4 core entities (Product, Category, Order, InventoryHistory)
 - **Repositories**: 5 (Data access layer)
 - **Services**: 5 (Business logic layer)
 - **Tests**: 20+ (Feature and Unit tests)

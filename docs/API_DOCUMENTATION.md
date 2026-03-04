@@ -7,20 +7,10 @@
 4. [Products Endpoints](#products-endpoints)
 5. [Categories Endpoints](#categories-endpoints)
 6. [Orders Endpoints](#orders-endpoints)
-7. [Carts Endpoints](#carts-endpoints)
-8. [Error Handling](#error-handling)
-9. [Pagination](#pagination)
-10. [Filtering](#filtering)
-11. [Sorting](#sorting)
-3. [Endpoints Overview](#endpoints-overview)
-4. [Products Endpoints](#products-endpoints)
-5. [Categories Endpoints](#categories-endpoints)
-6. [Orders Endpoints](#orders-endpoints)
-7. [Carts Endpoints](#carts-endpoints)
-8. [Error Handling](#error-handling)
-9. [Pagination](#pagination)
-10. [Filtering](#filtering)
-11. [Sorting](#sorting)
+7. [Error Handling](#error-handling)
+8. [Pagination](#pagination)
+9. [Filtering](#filtering)
+10. [Sorting](#sorting)
 
 ---
 
@@ -73,12 +63,6 @@ Accept: application/json
 | `POST /orders` | ❌ | ✅ | ✅ |
 | `PUT /orders/{id}` | ❌ | ✅ own + restricted | ✅ unrestricted |
 | `DELETE /orders/{id}` | ❌ | ❌ | ✅ |
-| **Carts** |
-| `GET /carts` | ❌ | ❌ | ✅ |
-| `GET /carts/{id}` | ✅ | ✅ | ✅ |
-| `POST /carts` | ✅ | ✅ | ✅ |
-| `PUT /carts/{id}` | ✅ | ✅ | ✅ |
-| `DELETE /carts/{id}` | ✅ | ✅ | ✅ |
 
 ### Auth Error Responses
 
@@ -192,12 +176,6 @@ Accept: application/json
 | POST | `/orders` | User / Admin | Place order |
 | PUT | `/orders/{id}` | User / Admin | Update order (users: restricted transitions) |
 | DELETE | `/orders/{id}` | Admin | Delete order |
-| **CARTS** |
-| GET | `/carts` | Admin | List all carts |
-| GET | `/carts/{id}` | — | Get single cart |
-| POST | `/carts` | — | Create cart |
-| PUT | `/carts/{id}` | — | Update cart |
-| DELETE | `/carts/{id}` | — | Delete cart |
 
 ---
 
@@ -717,92 +695,6 @@ DELETE /api/v1/orders/{id}
 
 ---
 
-## Carts Endpoints
-
-### List All Carts
-```
-GET /api/v1/carts
-```
-
-**Query Parameters:**
-```
-page=1                              (optional, default: 1)
-per_page=15                         (optional, default: 15, max: 100)
-sort=id|created_at|updated_at       (optional, default: id)
-order=asc|desc                      (optional, default: asc)
-include=items                       (optional, load cart items)
-```
-
-**Example Request:**
-```bash
-GET /api/v1/carts?include=items&sort=created_at&order=desc
-```
-
-**Status Code:** `200 OK`
-
----
-
-### Get Single Cart
-```
-GET /api/v1/carts/{id}
-```
-
-**Status Code:** `200 OK`
-
----
-
-### Create Cart
-```
-POST /api/v1/carts
-```
-
-**Request Body:**
-```json
-{
-  "user_id": 1,
-  "items": [
-    {
-      "product_id": 1,
-      "quantity": 2
-    }
-  ]
-}
-```
-
-**Status Code:** `201 Created`
-
----
-
-### Update Cart
-```
-PUT /api/v1/carts/{id}
-```
-
-**Request Body:**
-```json
-{
-  "items": [
-    {
-      "product_id": 1,
-      "quantity": 3
-    }
-  ]
-}
-```
-
-**Status Code:** `200 OK`
-
----
-
-### Delete Cart
-```
-DELETE /api/v1/carts/{id}
-```
-
-**Status Code:** `200 OK`
-
----
-
 ## Error Handling
 
 ### HTTP Status Codes
@@ -972,10 +864,6 @@ sort=id | name | created_at | updated_at
 sort=id | status | total_price | created_at | updated_at
 ```
 
-**Carts**
-```
-sort=id | created_at | updated_at
-```
 
 ### Sort Examples
 
@@ -1076,12 +964,6 @@ GET /api/v1/products?filter[name]=laptop&filter[min_price]=500&filter[max_price]
 GET /api/v1/orders?sort=created_at&order=desc&page=1&per_page=10
 ```
 
-### Get User's Cart with Items
-
-```bash
-# Get cart with included items
-GET /api/v1/carts/{id}?include=items
-```
 
 ---
 

@@ -12,15 +12,13 @@
 
 ## Overview
 
-The Shop API uses a relational database design with 5 core tables:
+The Shop API uses a relational database design with the following core tables:
 
 - **users** - User/customer accounts
 - **categories** - Product categories (hierarchical)
 - **products** - Product catalog
 - **orders** - Customer orders
 - **order_items** - Items within orders
-- **carts** - Shopping carts
-- **cart_items** - Items in carts
 - **inventory_history** - Inventory change tracking
 
 ---
@@ -39,55 +37,51 @@ The Shop API uses a relational database design with 5 core tables:
        │
        │ 1:M
        │
-   ┌───┴─────────┐
-   │             │
-   ▼             ▼
-┌─────────┐  ┌──────────┐
-│ orders  │  │  carts   │
-└────┬────┘  └────┬─────┘
-     │            │
-     │            │ 1:M
-     │            │
-     ▼            ▼
-┌──────────┐  ┌──────────┐
-│order_    │  │cart_     │
-│items     │  │items     │
-└────┬─────┘  └────┬─────┘
-     │ M:1        │ M:1
-     │            │
-     └────┬───────┘
-          │
-          ▼
-    ┌──────────────┐
-    │  products    │
-    ├──────────────┤
-    │ id (PK)      │
-    │ category_id  │
-    │ name         │
-    │ price        │
-    │ quantity     │
-    └──────┬───────┘
-           │
-           │ M:1
-           │
-           ▼
-    ┌──────────────┐
-    │ categories   │
-    ├──────────────┤
-    │ id (PK)      │
-    │ parent_id    │ (self-referencing)
-    │ name         │
-    └──────────────┘
+       ▼
+┌─────────┐
+│ orders  │
+└────┬────┘
+     │
+     │ 1:M
+     │
+     ▼
+┌──────────┐
+│order_    │
+│items     │
+└────┬─────┘
+     │ M:1
+     │
+     ▼
+┌──────────────┐
+│  products    │
+├──────────────┤
+│ id (PK)      │
+│ category_id  │
+│ name         │
+│ price        │
+│ quantity     │
+└──────┬───────┘
+       │
+       │ M:1
+       │
+       ▼
+┌──────────────┐
+│ categories   │
+├──────────────┤
+│ id (PK)      │
+│ parent_id    │ (self-referencing)
+│ name         │
+└──────────────┘
 
-    ┌─────────────────────┐
-    │ inventory_history   │
-    ├─────────────────────┤
-    │ id (PK)             │
-    │ product_id (FK)     │
-    │ quantity_change     │
-    │ reason              │
-    │ created_at          │
-    └─────────────────────┘
+┌─────────────────────┐
+│ inventory_history   │
+├─────────────────────┤
+│ id (PK)             │
+│ product_id (FK)     │
+│ quantity_change     │
+│ reason              │
+│ created_at          │
+└─────────────────────┘
 ```
 
 ---
@@ -280,68 +274,6 @@ CREATE INDEX idx_order_items_product_id ON order_items(product_id);
 
 ---
 
-### carts Table
-
-**Purpose:** Store shopping carts for users
-
-**Structure:**
-```
-Column Name    Type          Constraints        Description
-────────────────────────────────────────────────────────────
-id             bigint        PK, Auto-inc       Cart ID
-user_id        bigint        FK, NOT NULL       User reference
-created_at     timestamp     DEFAULT NULL       Creation timestamp
-updated_at     timestamp     DEFAULT NULL       Last update timestamp
-```
-
-**SQL:**
-```sql
-CREATE TABLE carts (
-    id BIGINT PRIMARY KEY AUTOINCREMENT,
-    user_id BIGINT NOT NULL REFERENCES users(id),
-    created_at TIMESTAMP,
-    updated_at TIMESTAMP
-);
-
-CREATE INDEX idx_carts_user_id ON carts(user_id);
-```
-
----
-
-### cart_items Table
-
-**Purpose:** Store individual items in shopping carts
-
-**Structure:**
-```
-Column Name    Type          Constraints        Description
-────────────────────────────────────────────────────────────
-id             bigint        PK, Auto-inc       Item ID
-cart_id        bigint        FK, NOT NULL       Cart reference
-product_id     bigint        FK, NOT NULL       Product reference
-quantity       integer       NOT NULL, > 0      Quantity in cart
-created_at     timestamp     DEFAULT NULL       Creation timestamp
-updated_at     timestamp     DEFAULT NULL       Last update timestamp
-```
-
-**SQL:**
-```sql
-CREATE TABLE cart_items (
-    id BIGINT PRIMARY KEY AUTOINCREMENT,
-    cart_id BIGINT NOT NULL REFERENCES carts(id),
-    product_id BIGINT NOT NULL REFERENCES products(id),
-    quantity INTEGER NOT NULL,
-    created_at TIMESTAMP,
-    updated_at TIMESTAMP,
-    CHECK (quantity > 0)
-);
-
-CREATE INDEX idx_cart_items_cart_id ON cart_items(cart_id);
-CREATE INDEX idx_cart_items_product_id ON cart_items(product_id);
-```
-
----
-
 ### inventory_history Table
 
 **Purpose:** Track inventory changes for audit and analytics
@@ -398,12 +330,6 @@ $user = User::find(1);
 $orders = $user->orders; // Get all user's orders
 ```
 
-#### User → Carts
-```
-One user can have many carts
-users.id → carts.user_id
-```
-
 #### Category → Products
 ```
 One category can have many products
@@ -440,12 +366,6 @@ One order can have many items
 orders.id → order_items.order_id
 ```
 
-#### Cart → Cart Items
-```
-One cart can have many items
-carts.id → cart_items.cart_id
-```
-
 ### Many-to-Many Relationships
 
 #### Orders → Products (through order_items)
@@ -462,14 +382,6 @@ foreach ($order->items as $item) {
 }
 ```
 
-#### Carts → Products (through cart_items)
-```
-Carts have many products
-Products are in many carts
-```
-
----
-
 ## Indexes
 
 ### Performance Indexes
@@ -485,9 +397,6 @@ orders           user_id             Get user's orders
 orders           status              Filter by status
 order_items      order_id            Get order items
 order_items      product_id          Get product orders
-carts            user_id             Get user's carts
-cart_items       cart_id             Get cart items
-cart_items       product_id          Get product carts
 inventory_history product_id         Get product history
 ```
 
@@ -529,9 +438,7 @@ database/migrations/
 ├── 2024_01_15_000002_create_products_table.php
 ├── 2024_01_15_000003_create_orders_table.php
 ├── 2024_01_15_000004_create_order_items_table.php
-├── 2024_01_15_000005_create_carts_table.php
-├── 2024_01_15_000006_create_cart_items_table.php
-└── 2024_01_15_000007_create_inventory_history_table.php
+└── 2024_01_15_000005_create_inventory_history_table.php
 ```
 
 ### Running Migrations
@@ -615,19 +522,6 @@ $orders = Order::orderBy('created_at', 'desc')->get();
 
 // Get orders over $100
 $orders = Order::where('total_price', '>', 100)->get();
-```
-
-### Cart Queries
-
-```php
-// Get user's cart
-$cart = Cart::where('user_id', 1)->first();
-
-// Get cart with items
-$cart = Cart::with('items.product')->find(1);
-
-// Get items in cart
-$items = CartItem::where('cart_id', 1)->get();
 ```
 
 ### Category Queries

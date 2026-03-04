@@ -41,7 +41,7 @@ Contains:
 Contains:
 - Base URL and authentication
 - Response formats
-- All endpoints (Products, Categories, Orders, Carts)
+- All endpoints (Products, Categories, Orders)
 - Request examples and responses
 - Error handling
 - Pagination, filtering, sorting examples
