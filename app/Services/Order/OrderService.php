@@ -6,7 +6,9 @@ use App\Dto\InventoryHistory\UnpersistedInventoryHistoryEntry;
 use App\Dto\Order\Order;
 use App\Dto\Order\UnpersistedOrder;
 use App\Enums\OrderStatus;
+use App\Events\OrderCreatedEvent;
 use App\Events\OrderPaidEvent;
+use App\Events\OrderShippedEvent;
 use App\Exceptions\InsufficientStockException;
 use App\Exceptions\InvalidOrderStateException;
 use App\Exceptions\OrderNotFoundException;
@@ -105,6 +107,8 @@ final readonly class OrderService implements OrderServiceInterface
             'item_count' => count($order->items),
         ]);
 
+        OrderCreatedEvent::dispatch($order);
+
         return $order;
     }
 
@@ -173,6 +177,9 @@ final readonly class OrderService implements OrderServiceInterface
             'as_admin' => $asAdmin,
         ]);
 
+        if ($unpersistedOrder->status === OrderStatus::Shipped) {
+            OrderShippedEvent::dispatch($updated);
+        }
 
         return $updated;
     }

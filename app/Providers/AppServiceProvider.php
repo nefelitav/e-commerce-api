@@ -7,10 +7,15 @@ use App\CQRS\Commands\Order\CreateOrderCommand;
 use App\CQRS\Commands\Product\CreateProductCommand;
 use App\CQRS\Handlers\Order\CreateOrderCommandHandler;
 use App\CQRS\Handlers\Product\CreateProductCommandHandler;
+use App\Events\OrderCreatedEvent;
 use App\Events\OrderPaidEvent;
+use App\Events\OrderShippedEvent;
 use App\Http\Middleware\RequireAdmin;
 use App\Http\Middleware\RequireAuth;
+use App\Listeners\SendOrderConfirmationEmail;
+use App\Listeners\SendOrderPaidEmail;
 use App\Listeners\SendOrderPaidWebhook;
+use App\Listeners\SendOrderShippedEmail;
 use App\Repositories\Category\CategoryRepository;
 use App\Services\AuditLogger;
 use App\Services\Category\CategoryService;
@@ -50,7 +55,10 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        Event::listen(OrderCreatedEvent::class, SendOrderConfirmationEmail::class);
         Event::listen(OrderPaidEvent::class, SendOrderPaidWebhook::class);
+        Event::listen(OrderPaidEvent::class, SendOrderPaidEmail::class);
+        Event::listen(OrderShippedEvent::class, SendOrderShippedEmail::class);
 
         /** @var Router $router */
         $router = $this->app->make(Router::class);

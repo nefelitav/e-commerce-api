@@ -191,13 +191,21 @@ YOUR app calls warehouse ───── OUTBOUND webhook
        Admin ships it → status: SHIPPED → DELIVERED
 ```
 
-### 9. **Standardized Responses**
+### 9. **Email Notifications**
+- Queued email notifications for key order lifecycle events
+- Order confirmation email sent on order placement
+- Payment received email sent when payment is confirmed
+- Shipment notification email sent when order ships
+- All emails dispatched via the `emails` queue with 3 retries and 30s backoff
+- Default mailer set to `log` for development (configure SMTP for production)
+
+### 10. **Standardized Responses**
 - Consistent JSON format
 - Pagination metadata
 - Success/error indicators
 - Helpful messages
 
-### 10. **Request Validation**
+### 11. **Request Validation**
 - Validate all input parameters
 - Type checking (integer, string, numeric)
 - Range validation
@@ -219,7 +227,9 @@ app/
 ├── Enums/                        # Enumerations
 │   └── OrderStatus.php
 ├── Events/                       # Domain Events
-│   └── OrderPaidEvent.php
+│   ├── OrderCreatedEvent.php
+│   ├── OrderPaidEvent.php
+│   └── OrderShippedEvent.php
 ├── Exceptions/                   # Custom Exceptions
 │   ├── BadRequestException.php
 │   ├── CategoryAlreadyExistsException.php
@@ -230,7 +240,14 @@ app/
 │   ├── ProductNotFoundException.php
 │   └── UnprocessableEntityException.php
 ├── Listeners/                    # Event Listeners
-│   └── SendOrderPaidWebhook.php
+│   ├── SendOrderConfirmationEmail.php
+│   ├── SendOrderPaidEmail.php
+│   ├── SendOrderPaidWebhook.php
+│   └── SendOrderShippedEmail.php
+├── Mail/                         # Queued Mailables
+│   ├── OrderConfirmationMail.php
+│   ├── OrderPaidMail.php
+│   └── OrderShippedMail.php
 ├── Http/
 │   ├── Controllers/              # API Controllers
 │   │   └── Api/V1/

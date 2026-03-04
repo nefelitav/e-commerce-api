@@ -6,7 +6,9 @@ use App\Dto\Order\Order;
 use App\Dto\Order\UnpersistedOrder;
 use App\Dto\Order\UnpersistedOrderItem;
 use App\Enums\OrderStatus;
+use App\Events\OrderCreatedEvent;
 use App\Events\OrderPaidEvent;
+use App\Events\OrderShippedEvent;
 use App\Exceptions\InsufficientStockException;
 use App\Exceptions\InvalidOrderStateException;
 use App\Exceptions\OrderNotFoundException;
@@ -182,6 +184,33 @@ class OrderServiceTest extends TestCase
         $this->expectException(ProductNotFoundException::class);
         $this->service->createOrder($unpersisted);
     }
+    public function test_createOrder_dispatches_order_created_event(): void
+    {
+        Event::fake([OrderCreatedEvent::class]);
+        $user = UserModel::factory()->create();
+        /** @var ProductModel $productModel */
+        $productModel = ProductModel::factory()->create(['quantity' => 10]);
+        $item = new UnpersistedOrderItem(
+            productId: $productModel->id,
+            quantity: 1,
+            unitPrice: 50.0,
+        );
+        $unpersisted = new UnpersistedOrder(
+            userId: $user->id,
+            status: OrderStatus::Pending,
+            totalPrice: 50,
+            items: [$item],
+        );
+        $persisted = Order::fromModel(OrderModel::factory()->create());
+        $this->productRepository->method('findByIdForUpdate')->willReturn($productModel);
+        $this->inventoryHistoryRepository->method('record')
+            ->willReturn(InventoryHistoryEntry::fromModel(InventoryHistoryModel::factory()->create()));
+        $this->repository->method('persist')->willReturn($persisted);
+        $this->service->createOrder($unpersisted);
+        Event::assertDispatched(OrderCreatedEvent::class, function (OrderCreatedEvent $event) use ($persisted) {
+            return $event->order->id === $persisted->id;
+        });
+    }
     public function test_updateOrder_delegates_to_user_status_machine(): void
     {
         $id   = 1;
@@ -333,6 +362,46 @@ class OrderServiceTest extends TestCase
         $this->repository->method('update')->willReturn($updated);
         $this->service->updateOrder(1, $unpersisted);
         Event::assertNotDispatched(OrderPaidEvent::class);
+    }
+    public function test_updateOrder_dispatches_shipped_event_on_shipped_transition(): void
+    {
+        Event::fake([OrderShippedEvent::class]);
+        $user = UserModel::factory()->create();
+        /** @var OrderModel $orderModel */
+        $orderModel = OrderModel::factory()->create(['status' => OrderStatus::Paid->value]);
+        $existingOrder = Order::fromModel($orderModel);
+        $unpersisted = new UnpersistedOrder(
+            userId: $user->id,
+            status: OrderStatus::Shipped,
+            totalPrice: 200,
+            items: [],
+        );
+        $updated = Order::fromModel(OrderModel::factory()->create(['status' => OrderStatus::Shipped->value]));
+        $this->repository->method('findById')->willReturn($existingOrder);
+        $this->repository->method('update')->willReturn($updated);
+        $this->service->updateOrder(1, $unpersisted, asAdmin: true);
+        Event::assertDispatched(OrderShippedEvent::class, function (OrderShippedEvent $event) use ($updated) {
+            return $event->order->id === $updated->id;
+        });
+    }
+    public function test_updateOrder_does_not_dispatch_shipped_event_on_non_shipped_transition(): void
+    {
+        Event::fake([OrderShippedEvent::class]);
+        $user = UserModel::factory()->create();
+        /** @var OrderModel $orderModel */
+        $orderModel = OrderModel::factory()->create(['status' => OrderStatus::Pending->value]);
+        $existingOrder = Order::fromModel($orderModel);
+        $unpersisted = new UnpersistedOrder(
+            userId: $user->id,
+            status: OrderStatus::Cancelled,
+            totalPrice: 200,
+            items: [],
+        );
+        $updated = Order::fromModel(OrderModel::factory()->create(['status' => OrderStatus::Cancelled->value]));
+        $this->repository->method('findById')->willReturn($existingOrder);
+        $this->repository->method('update')->willReturn($updated);
+        $this->service->updateOrder(1, $unpersisted);
+        Event::assertNotDispatched(OrderShippedEvent::class);
     }
     public function test_deleteOrder_returns_true(): void
     {

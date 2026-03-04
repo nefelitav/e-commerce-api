@@ -12,8 +12,9 @@
 9. [Caching](#caching)
 10. [Audit Logging](#audit-logging)
 11. [Webhooks](#webhooks)
-12. [Error Handling](#error-handling)
-13. [Extension Points](#extension-points)
+12. [Email Notifications](#email-notifications)
+13. [Error Handling](#error-handling)
+14. [Extension Points](#extension-points)
 
 ---
 
@@ -1308,6 +1309,72 @@ If the external endpoint returns a non-2xx response, the listener throws a `Requ
 - **Queued outbound delivery:** Outbound webhook delivery is async so it doesn't block the payment confirmation response.
 - **Dedicated `markOrderAsPaid()` method:** The `pending → paid` transition bypasses the general-purpose `updateOrder()` and its status machine. This makes the payment flow explicit and prevents admins from manually setting orders to paid.
 - **Skips when unconfigured:** If no outbound webhook URL is set, the listener returns immediately without making any HTTP call.
+
+---
+
+## Email Notifications
+
+The application sends queued email notifications to customers at key points in the order lifecycle.
+
+### Implemented notifications
+
+| Event | Mailable | Listener | Trigger |
+|-------|----------|----------|---------|
+| `OrderCreatedEvent` | `OrderConfirmationMail` | `SendOrderConfirmationEmail` | Order placed |
+| `OrderPaidEvent` | `OrderPaidMail` | `SendOrderPaidEmail` | Payment confirmed |
+| `OrderShippedEvent` | `OrderShippedMail` | `SendOrderShippedEmail` | Order shipped |
+
+### Architecture
+
+```
+OrderService
+    │
+    │  createOrder() ──► OrderCreatedEvent ──► SendOrderConfirmationEmail
+    │  markOrderAsPaid() ──► OrderPaidEvent ──► SendOrderPaidEmail
+    │  updateOrder(shipped) ──► OrderShippedEvent ──► SendOrderShippedEmail
+    │
+    │  All listeners are queued (ShouldQueue)
+    │
+    ▼
+Queue worker processes `emails` queue
+    │
+    ▼
+Mail::to($user->email)->send($mailable)
+```
+
+### Queue configuration
+
+| Property | Value |
+|----------|-------|
+| Queue name | `emails` |
+| Retries | 3 attempts |
+| Backoff | 30 seconds between retries |
+| Mailer (dev) | `log` (writes to `storage/logs/laravel.log`) |
+| Mailer (prod) | Configure SMTP via `MAIL_MAILER=smtp` in `.env` |
+
+### Mailable classes
+
+All mailables implement `ShouldQueue` and use the `Queueable` trait, so they are automatically dispatched to the queue when sent via `Mail::to()->send()`.
+
+| Mailable | Subject | View |
+|----------|---------|------|
+| `OrderConfirmationMail` | "Order #42 Confirmed" | `emails.order-confirmation` |
+| `OrderPaidMail` | "Payment Received for Order #42" | `emails.order-paid` |
+| `OrderShippedMail` | "Order #42 Has Been Shipped" | `emails.order-shipped` |
+
+### Blade templates
+
+Located in `resources/views/emails/`:
+- `order-confirmation.blade.php` — order details, item list, total
+- `order-paid.blade.php` — payment reference, order total
+- `order-shipped.blade.php` — shipping notification, order total
+
+### Design decisions
+
+- **Queued, not inline:** Email delivery is async via the `emails` queue. This prevents slow SMTP connections from blocking API responses.
+- **Listener per event:** Each event has its own dedicated listener and mailable. This keeps concerns separated and makes it easy to add/remove notifications.
+- **Graceful skip on missing user:** If the user is deleted between order creation and email dispatch, the listener logs a warning and returns without error.
+- **Log mailer for dev:** The default mailer is `log`, so emails appear in `storage/logs/laravel.log` during development. No SMTP setup needed.
 
 ---
 
