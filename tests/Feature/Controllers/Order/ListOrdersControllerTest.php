@@ -96,5 +96,58 @@ class ListOrdersControllerTest extends TestCase
         $prices = array_column($response->json('data'), 'total_price');
         $this->assertEquals([100, 75, 50], $prices);
     }
+
+    public function test_filter_by_single_status(): void
+    {
+        $admin = UserModel::factory()->admin()->create();
+        $this->actingAs($admin);
+
+        OrderModel::factory()->create(['status' => 'pending']);
+        OrderModel::factory()->create(['status' => 'paid']);
+        OrderModel::factory()->create(['status' => 'shipped']);
+
+        $response = $this->getJson(route('v1.orders.index', [
+            'filter' => ['status' => 'pending'],
+        ]));
+
+        $response->assertStatus(Response::HTTP_OK);
+        $this->assertEquals(1, $response->json('meta.total'));
+        $this->assertEquals('pending', $response->json('data.0.status'));
+    }
+
+    public function test_filter_by_multiple_statuses(): void
+    {
+        $admin = UserModel::factory()->admin()->create();
+        $this->actingAs($admin);
+
+        OrderModel::factory()->create(['status' => 'pending']);
+        OrderModel::factory()->create(['status' => 'paid']);
+        OrderModel::factory()->create(['status' => 'shipped']);
+        OrderModel::factory()->create(['status' => 'delivered']);
+
+        $response = $this->getJson(route('v1.orders.index', [
+            'filter' => ['status' => 'pending,paid'],
+        ]));
+
+        $response->assertStatus(Response::HTTP_OK);
+        $this->assertEquals(2, $response->json('meta.total'));
+
+        $statuses = array_column($response->json('data'), 'status');
+        $this->assertContains('pending', $statuses);
+        $this->assertContains('paid', $statuses);
+        $this->assertNotContains('shipped', $statuses);
+    }
+
+    public function test_filter_by_multiple_statuses_validation_rejects_invalid(): void
+    {
+        $admin = UserModel::factory()->admin()->create();
+        $this->actingAs($admin);
+
+        $response = $this->getJson(route('v1.orders.index', [
+            'filter' => ['status' => 'pending,invalid_status'],
+        ]));
+
+        $response->assertStatus(Response::HTTP_UNPROCESSABLE_ENTITY);
+    }
 }
 

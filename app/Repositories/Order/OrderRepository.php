@@ -38,7 +38,12 @@ class OrderRepository
 
         // Apply filters
         if (isset($filters['status'])) {
-            $query->where('status', $filters['status']);
+            $statuses = explode(',', $filters['status']);
+            if (count($statuses) === 1) {
+                $query->where('status', $statuses[0]);
+            } else {
+                $query->whereIn('status', $statuses);
+            }
         }
         if (isset($filters['user_id'])) {
             $query->where('user_id', $filters['user_id']);

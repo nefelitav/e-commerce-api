@@ -57,33 +57,6 @@
 
 ---
 
-## Project Goals
-
-### Short-term Goals (Completed ✅)
-- ✅ Create RESTful API endpoints for core resources
-- ✅ Implement CRUD operations for all entities
-- ✅ Add comprehensive filtering capabilities
-- ✅ Add sorting and pagination
-- ✅ Implement request validation
-- ✅ Create response standardization
-- ✅ Add error handling
-- ✅ Add pessimistic locking for inventory mutations (prevent overselling)
-
-### Medium-term Goals
-- Implement authentication and authorization
-- Add advanced filtering (AND/OR logic)
-- Create audit logging
-- Implement webhooks
-
-### Long-term Goals
-- Multi-tenant support
-- Advanced analytics
-- Performance optimization
-- Mobile app support
-- Third-party integrations
-
----
-
 ## Architecture Overview
 
 ### Design Patterns Used
@@ -142,6 +115,8 @@
 
 ### 1. **Product Management**
 - List products with filtering (name, category, price range, quantity range)
+- Search across name and description (`filter[search]`)
+- Filter by multiple categories at once (`filter[category_ids]`)
 - Sort by any field (id, name, price, quantity, created_at, updated_at)
 - Paginated results with metadata
 - Include related categories
@@ -154,7 +129,8 @@
 
 ### 3. **Order Management**
 - Create and manage orders
-- Filter by status or price range
+- Filter by status (single or multiple: `filter[status]=pending,paid`)
+- Filter by price range
 - Track order items
 - Pagination support
 
@@ -165,9 +141,10 @@
 - `InsufficientStockException` thrown when quantity would go negative
 - All stock mutations are wrapped in database transactions for atomicity
 
-### 6. **Advanced Querying**
 ### 5. **Advanced Querying**
 - Multi-field filtering with AND logic
+- OR filtering via comma-separated values (`filter[category_ids]=1,3,7`, `filter[status]=pending,paid`)
+- Cross-field OR search (`filter[search]=laptop` matches name or description)
 - Sort by any relevant field
 - Pagination with configurable page size
 - Load related resources via includes

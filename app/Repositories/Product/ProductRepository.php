@@ -41,8 +41,20 @@ class ProductRepository
             if (isset($filters['name'])) {
                 $query->where('name', 'like', '%' . $filters['name'] . '%');
             }
+            if (isset($filters['search'])) {
+                $term = $filters['search'];
+                $query->where(function ($q) use ($term) {
+                    $q->where('name', 'like', '%' . $term . '%')
+                      ->orWhere('description', 'like', '%' . $term . '%');
+                });
+            }
             if (isset($filters['category_id'])) {
                 $query->where('category_id', $filters['category_id']);
+            }
+            if (isset($filters['category_ids'])) {
+                /** @var array<int, int> $ids */
+                $ids = array_map('intval', explode(',', $filters['category_ids']));
+                $query->whereIn('category_id', $ids);
             }
             if (isset($filters['min_price'])) {
                 $query->where('price', '>=', $filters['min_price']);

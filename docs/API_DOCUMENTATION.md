@@ -192,8 +192,10 @@ page=1                              (optional, default: 1)
 per_page=15                         (optional, default: 15, max: 100)
 sort=id|name|price|quantity|created_at|updated_at  (optional, default: id)
 order=asc|desc                      (optional, default: asc)
-filter[name]=text                   (optional, substring search)
+filter[name]=text                   (optional, substring search on name)
+filter[search]=text                 (optional, substring search on name OR description)
 filter[category_id]=1               (optional, exact match)
+filter[category_ids]=1,3,7          (optional, OR match across multiple categories)
 filter[min_price]=100               (optional, numeric)
 filter[max_price]=1000              (optional, numeric)
 filter[min_quantity]=5              (optional, integer)
@@ -532,7 +534,7 @@ page=1                              (optional, default: 1)
 per_page=15                         (optional, default: 15, max: 100)
 sort=id|status|total_price|created_at|updated_at  (optional)
 order=asc|desc                      (optional, default: asc)
-filter[status]=pending              (optional)
+filter[status]=pending              (optional, single or comma-separated: pending,paid)
 filter[min_total]=100               (optional)
 filter[max_total]=5000              (optional)
 include=items                       (optional, load order items)
@@ -798,8 +800,10 @@ filter[field1]=value1&filter[field2]=value2
 
 **Products**
 ```
-filter[name]=text           - Substring search
-filter[category_id]=1       - Exact integer match
+filter[name]=text           - Substring search (name only)
+filter[search]=text         - Substring search (name OR description)
+filter[category_id]=1       - Exact integer match (single category)
+filter[category_ids]=1,3,7  - OR match (products in any of the listed categories)
 filter[min_price]=100       - Numeric range start
 filter[max_price]=1000      - Numeric range end
 filter[min_quantity]=5      - Integer range start
@@ -814,22 +818,38 @@ filter[parent_id]=1         - Exact match (use null for root)
 
 **Orders**
 ```
-filter[status]=pending      - Exact text match
+filter[status]=pending      - Single status match
+filter[status]=pending,paid - OR match (orders in any of the listed statuses)
 filter[min_total]=100       - Numeric range start
 filter[max_total]=5000      - Numeric range end
 ```
 
 ### Filter Examples
 
+**Search products by name or description:**
+```bash
+GET /api/v1/products?filter[search]=laptop
+```
+
+**Products in multiple categories:**
+```bash
+GET /api/v1/products?filter[category_ids]=1,3,7
+```
+
 **Complex product query:**
 ```bash
-GET /api/v1/products?filter[category_id]=1&filter[min_price]=500&filter[max_price]=2000&filter[min_quantity]=5
+GET /api/v1/products?filter[category_ids]=1,3&filter[search]=pro&filter[min_price]=500&filter[max_price]=2000
 ```
 
 **Category hierarchy:**
 ```bash
 GET /api/v1/categories?filter[parent_id]=null   # Root categories
 GET /api/v1/categories?filter[parent_id]=1      # Children of category 1
+```
+
+**Orders with multiple statuses (actionable orders):**
+```bash
+GET /api/v1/orders?filter[status]=pending,paid
 ```
 
 **Order filtering:**

@@ -45,6 +45,8 @@ Complete documentation is available in the `docs/` directory:
 - ✅ Repository pattern
 - ✅ Service layer architecture
 - ✅ Full test coverage
+- ✅ Caching
+- ✅ Pessimistic locking for inventory mutations
 
 ## 📊 Entity Relationships
 

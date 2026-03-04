@@ -23,7 +23,7 @@ final class ListOrdersRequest extends FormRequest
             'sort' => ['sometimes', 'string', Rule::in(['id', 'status', 'total_price', 'created_at', 'updated_at'])],
             'order' => ['sometimes', 'string', Rule::in(['asc', 'desc'])],
             'filter' => ['sometimes', 'array'],
-            'filter.status' => ['sometimes', 'string', Rule::in(['pending', 'paid', 'shipped', 'delivered', 'cancelled', 'refunded'])],
+            'filter.status' => ['sometimes', 'string', 'regex:/^(pending|paid|shipped|delivered|cancelled|refunded)(,(pending|paid|shipped|delivered|cancelled|refunded))*$/'],
             'filter.min_total' => ['sometimes', 'numeric', 'min:0'],
             'filter.max_total' => ['sometimes', 'numeric', 'min:0', 'gte:filter.min_total'],
             'include' => ['sometimes', 'string'],
