@@ -7,8 +7,10 @@ use App\CQRS\Commands\Order\CreateOrderCommand;
 use App\CQRS\Commands\Product\CreateProductCommand;
 use App\CQRS\Handlers\Order\CreateOrderCommandHandler;
 use App\CQRS\Handlers\Product\CreateProductCommandHandler;
+use App\Events\OrderPaidEvent;
 use App\Http\Middleware\RequireAdmin;
 use App\Http\Middleware\RequireAuth;
+use App\Listeners\SendOrderPaidWebhook;
 use App\Repositories\Category\CategoryRepository;
 use App\Services\AuditLogger;
 use App\Services\Category\CategoryService;
@@ -19,6 +21,7 @@ use App\Services\Product\ProductServiceInterface;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Router;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
@@ -47,6 +50,8 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        Event::listen(OrderPaidEvent::class, SendOrderPaidWebhook::class);
+
         /** @var Router $router */
         $router = $this->app->make(Router::class);
         $router->aliasMiddleware('auth.required', RequireAuth::class);

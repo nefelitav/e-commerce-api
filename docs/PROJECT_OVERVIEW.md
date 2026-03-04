@@ -162,13 +162,42 @@
 - Separate daily log file (`storage/logs/audit.log`) with 90-day retention
 - Logged at the service layer — only successful mutations are recorded
 
-### 8. **Standardized Responses**
+### 8. **Webhooks**
+- Inbound: `POST /api/v1/webhooks/payments` receives payment confirmations from external providers
+- Payment confirmation transitions orders from `pending` to `paid` via `markOrderAsPaid()`
+- Outbound: `order.paid` event dispatches queued webhook to configurable URL
+- 3 retries with 10s backoff on outbound failure
+- Outbound URL configured via `WEBHOOK_ORDER_PAID_URL` env var (disabled when unset)
+
+**Payment flow:**
+```
+Customer → places order → status: PENDING
+                |
+                ▼
+        Pays on Stripe/PayPal
+                |
+                ▼
+Stripe calls YOUR app ──────── INBOUND webhook
+(POST /webhooks/payments)      (receiving a call)
+                |
+                ▼
+       Order → status: PAID
+                |
+                ▼
+YOUR app calls warehouse ───── OUTBOUND webhook
+(POST to fulfillment URL)      (sending a call)
+                |
+                ▼
+       Admin ships it → status: SHIPPED → DELIVERED
+```
+
+### 9. **Standardized Responses**
 - Consistent JSON format
 - Pagination metadata
 - Success/error indicators
 - Helpful messages
 
-### 9. **Request Validation**
+### 10. **Request Validation**
 - Validate all input parameters
 - Type checking (integer, string, numeric)
 - Range validation
@@ -187,6 +216,10 @@ app/
 │   ├── InventoryHistory/
 │   ├── Order/
 │   └── Product/
+├── Enums/                        # Enumerations
+│   └── OrderStatus.php
+├── Events/                       # Domain Events
+│   └── OrderPaidEvent.php
 ├── Exceptions/                   # Custom Exceptions
 │   ├── BadRequestException.php
 │   ├── CategoryAlreadyExistsException.php
@@ -196,17 +229,21 @@ app/
 │   ├── ProductAlreadyExistsException.php
 │   ├── ProductNotFoundException.php
 │   └── UnprocessableEntityException.php
+├── Listeners/                    # Event Listeners
+│   └── SendOrderPaidWebhook.php
 ├── Http/
 │   ├── Controllers/              # API Controllers
 │   │   └── Api/V1/
 │   │       ├── Category/
 │   │       ├── InventoryHistory/
 │   │       ├── Order/
-│   │       └── Product/
+│   │       ├── Product/
+│   │       └── Webhook/
 │   ├── Requests/                 # Form Requests (Validation)
 │   │   ├── Category/
 │   │   ├── Order/
-│   │   └── Product/
+│   │   ├── Product/
+│   │   └── Webhook/
 │   └── Responses/                # Response Objects
 │       ├── Category/
 │       ├── Order/

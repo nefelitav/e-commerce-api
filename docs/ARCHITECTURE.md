@@ -11,8 +11,9 @@
 8. [Order Status Machine](#order-status-machine)
 9. [Caching](#caching)
 10. [Audit Logging](#audit-logging)
-11. [Error Handling](#error-handling)
-12. [Extension Points](#extension-points)
+11. [Webhooks](#webhooks)
+12. [Error Handling](#error-handling)
+13. [Extension Points](#extension-points)
 
 ---
 
@@ -982,12 +983,14 @@ Enforces the **complete lifecycle** for operators. Every valid transition:
 
 | From | To |
 |------|----|
-| `pending` | `paid`, `cancelled` |
+| `pending` | `cancelled` |
 | `paid` | `shipped`, `refunded` |
 | `shipped` | `delivered` |
 | `delivered` | `refunded` |
 | `cancelled` | *(terminal — no outgoing transitions)* |
 | `refunded` | *(terminal — no outgoing transitions)* |
+
+> **Note:** The `pending → paid` transition is **not** an admin action. It is triggered by an external payment provider via the `POST /api/v1/webhooks/payments` endpoint, which calls `OrderService::markOrderAsPaid()`.
 
 Admins go through the machine too — they are not exempt. This means attempting to skip a step (e.g. `paid → delivered`) or resurrect a terminal order (`cancelled → pending`) throws the same `InvalidOrderStateException`.
 
@@ -1168,9 +1171,9 @@ The audit log writes to a separate daily file at `storage/logs/audit.log` with 9
 [2026-03-04T10:30:00+00:00] local.INFO: product.created {"entity":"product","entity_id":42,"user_id":1,"action":"product.created","properties":{"name":"Gaming Laptop","price":1299.99,"quantity":10},"ip":"127.0.0.1","timestamp":"2026-03-04T10:30:00+00:00"}
 ```
 
-**Order status updated:**
+**Order paid via payment webhook:**
 ```
-[2026-03-04T11:00:00+00:00] local.INFO: order.updated {"entity":"order","entity_id":7,"user_id":1,"action":"order.updated","properties":{"previous_status":"pending","new_status":"paid","total_price":299.99,"as_admin":true},"ip":"127.0.0.1","timestamp":"2026-03-04T11:00:00+00:00"}
+[2026-03-04T11:00:00+00:00] local.INFO: order.paid {"entity":"order","entity_id":7,"user_id":null,"action":"order.paid","properties":{"payment_reference":"pay_abc123","previous_status":"pending","total_price":299.99},"ip":"192.168.1.1","timestamp":"2026-03-04T11:00:00+00:00"}
 ```
 
 ### Design decisions
@@ -1178,6 +1181,133 @@ The audit log writes to a separate daily file at `storage/logs/audit.log` with 9
 - **Service layer, not middleware:** Audit logs are written from the service layer (after successful mutations) rather than as HTTP middleware. This ensures only successful operations are logged and the log captures domain-level context (e.g. previous status, quantity changes).
 - **After success only:** If a mutation throws (e.g. `InsufficientStockException`), no audit entry is written — nothing changed.
 - **Dedicated channel:** Audit logs are separated from application logs for easy searching, retention policies, and potential forwarding to external audit systems.
+
+---
+
+## Webhooks
+
+The application supports outbound webhooks to notify external systems of domain events. Webhooks are dispatched asynchronously via Laravel's queue system.
+
+### Implemented events
+
+| Event | Class | Trigger |
+|-------|-------|---------|
+| `order.paid` | `OrderPaidEvent` | Order status transitions to `paid` |
+
+### Architecture
+
+The payment flow is driven by an **inbound webhook** from an external payment provider, which triggers an **outbound webhook** to downstream systems (e.g. fulfillment):
+
+```
+External payment provider
+    │
+    │  POST /api/v1/webhooks/payments
+    │
+    ▼
+PaymentWebhookController
+    │
+    ▼
+OrderService::markOrderAsPaid()
+    │
+    │  validates pending → paid
+    │  persists status change
+    │
+    ▼
+OrderPaidEvent::dispatch()
+    │
+    │  (async via queue)
+    │
+    ▼
+SendOrderPaidWebhook (listener)
+    │
+    ▼
+HTTP POST → configured outbound webhook URL
+```
+
+**Key components:**
+
+| Component | Location | Responsibility |
+|-----------|----------|----------------|
+| `PaymentWebhookController` | `app/Http/Controllers/Api/V1/Webhook/PaymentWebhookController.php` | Receives inbound payment confirmation |
+| `PaymentWebhookRequest` | `app/Http/Requests/Webhook/PaymentWebhookRequest.php` | Validates inbound payload |
+| `OrderService::markOrderAsPaid()` | `app/Services/Order/OrderService.php` | Transitions order to paid, fires event |
+| `OrderPaidEvent` | `app/Events/OrderPaidEvent.php` | Event with outbound payload builder |
+| `SendOrderPaidWebhook` | `app/Listeners/SendOrderPaidWebhook.php` | Queued listener that POSTs to outbound URL |
+| Webhook config | `config/webhooks.php` | Stores outbound webhook URLs from env vars |
+
+### Inbound webhook (payment provider → shop)
+
+```
+POST /api/v1/webhooks/payments
+```
+
+**Auth:** None (public endpoint for external provider callbacks)
+
+**Request body:**
+```json
+{
+  "order_id": 42,
+  "payment_reference": "pay_abc123",
+  "status": "paid"
+}
+```
+
+The endpoint validates that:
+- The order exists
+- The status field is `paid`
+- The order is currently in `pending` status (otherwise returns 400)
+
+### Outbound webhook (shop → fulfillment)
+
+Configuration via environment variable:
+
+```env
+WEBHOOK_ORDER_PAID_URL=https://your-fulfillment-system.com/webhooks/order-paid
+```
+
+Leave unset or empty to disable the outbound webhook.
+
+### Outbound webhook payload
+
+```json
+{
+  "event": "order.paid",
+  "occurred_at": "2026-03-04T10:30:00+00:00",
+  "data": {
+    "order_id": 42,
+    "user_id": 7,
+    "status": "paid",
+    "total_price": 299.99,
+    "items": [
+      {
+        "product_id": 10,
+        "quantity": 2,
+        "unit_price": 99.99
+      }
+    ]
+  }
+}
+```
+
+### Reliability
+
+| Property | Value |
+|----------|-------|
+| Queue | `webhooks` |
+| Retries | 3 attempts |
+| Backoff | 10 seconds between retries |
+| Timeout | 10 seconds per HTTP request |
+| Failure logging | Failed deliveries logged to `audit` channel |
+| Successful delivery | Logged to `audit` channel |
+
+If the external endpoint returns a non-2xx response, the listener throws a `RequestException` which triggers Laravel's queue retry mechanism.
+
+### Design decisions
+
+- **Inbound + outbound separation:** The inbound webhook (`POST /webhooks/payments`) receives external payment confirmations. The outbound webhook (`SendOrderPaidWebhook`) notifies downstream systems. These are independent — you can receive payments without sending outbound webhooks.
+- **Queued outbound delivery:** Outbound webhook delivery is async so it doesn't block the payment confirmation response.
+- **Dedicated `markOrderAsPaid()` method:** The `pending → paid` transition bypasses the general-purpose `updateOrder()` and its status machine. This makes the payment flow explicit and prevents admins from manually setting orders to paid.
+- **Skips when unconfigured:** If no outbound webhook URL is set, the listener returns immediately without making any HTTP call.
 
 ---
 

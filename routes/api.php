@@ -17,6 +17,7 @@ use App\Http\Controllers\Api\V1\Product\DeleteProductController;
 use App\Http\Controllers\Api\V1\Product\GetProductController;
 use App\Http\Controllers\Api\V1\Product\ListProductsController;
 use App\Http\Controllers\Api\V1\Product\UpdateProductController;
+use App\Http\Controllers\Api\V1\Webhook\PaymentWebhookController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('api/v1')->group(function () {
@@ -28,6 +29,9 @@ Route::prefix('api/v1')->group(function () {
 
     Route::get('products', [ListProductsController::class, 'index'])->name('v1.products.index');
     Route::get('products/{id}', [GetProductController::class, 'show'])->name('v1.products.show');
+
+    // Webhooks (external provider callbacks)
+    Route::post('webhooks/payments', PaymentWebhookController::class)->name('v1.webhooks.payments');
 
     Route::middleware('auth.required')->group(function () {
         // Orders

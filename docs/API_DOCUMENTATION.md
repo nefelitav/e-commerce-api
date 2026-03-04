@@ -176,6 +176,8 @@ Accept: application/json
 | POST | `/orders` | User / Admin | Place order |
 | PUT | `/orders/{id}` | User / Admin | Update order (users: restricted transitions) |
 | DELETE | `/orders/{id}` | Admin | Delete order |
+| **WEBHOOKS** |
+| POST | `/webhooks/payments` | — | Receive payment confirmation (external provider) |
 
 ---
 
@@ -948,6 +950,53 @@ curl -i http://localhost:8000/api/v1/products
 # HTTP/1.1 429 Too Many Requests
 # Retry-After: 42
 ```
+
+---
+
+## Webhook Endpoints
+
+### Payment Confirmation
+
+```
+POST /api/v1/webhooks/payments
+```
+
+**Auth:** None (called by external payment provider)
+
+**Description:** Receives a payment confirmation from an external payment provider. Transitions the order from `pending` to `paid` and dispatches an `OrderPaidEvent` which triggers outbound webhooks.
+
+**Request Body:**
+```json
+{
+  "order_id": 42,
+  "payment_reference": "pay_abc123",
+  "status": "paid"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `order_id` | integer | ✅ | The order ID (must exist) |
+| `payment_reference` | string | ✅ | External payment reference ID |
+| `status` | string | ✅ | Must be `paid` |
+
+**Success Response (200 OK):**
+```json
+{
+  "success": true,
+  "data": {
+    "id": 42,
+    "user_id": 7,
+    "status": "paid",
+    "total_price": 299.99,
+    "items": [...]
+  }
+}
+```
+
+**Error Responses:**
+- `400 Bad Request` — Order is not in `pending` status or not found
+- `422 Unprocessable Entity` — Validation error (missing fields, invalid status, nonexistent order)
 
 ---
 

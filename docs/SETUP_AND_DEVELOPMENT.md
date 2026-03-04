@@ -655,6 +655,9 @@ CACHE_DRIVER=file
 # Queue
 QUEUE_CONNECTION=sync
 
+# Webhooks (optional, leave unset to disable)
+WEBHOOK_ORDER_PAID_URL=
+
 # Mail
 MAIL_DRIVER=log
 ```

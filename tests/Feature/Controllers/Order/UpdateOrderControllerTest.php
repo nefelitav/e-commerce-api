@@ -27,7 +27,7 @@ class UpdateOrderControllerTest extends TestCase
         $this->actingAs($admin);
 
         $order = OrderModel::factory()->create([
-            'status' => 'pending',
+            'status' => 'paid',
             'total_price' => 100,
         ]);
 
@@ -43,7 +43,7 @@ class UpdateOrderControllerTest extends TestCase
 
         $payload = [
             'id' => $order->id,
-            'status' => 'paid',
+            'status' => 'shipped',
             'total_price' => 200,
             'items' => [
                 ['product_id' => $newProduct->id, 'quantity' => 2, 'unit_price' => 100],
@@ -53,9 +53,9 @@ class UpdateOrderControllerTest extends TestCase
         $response = $this->putJson(route('v1.orders.update', $order->id), $payload);
 
         $response->assertStatus(Response::HTTP_OK)
-            ->assertJsonFragment(['status' => 'paid']);
+            ->assertJsonFragment(['status' => 'shipped']);
 
-        $this->assertDatabaseHas('orders', ['id' => $order->id, 'status' => 'paid']);
+        $this->assertDatabaseHas('orders', ['id' => $order->id, 'status' => 'shipped']);
     }
 
     public function test_regular_user_can_cancel_own_pending_order_within_24_hours(): void

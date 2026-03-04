@@ -6,7 +6,9 @@ use App\Dto\Order\Order;
 use App\Dto\Order\UnpersistedOrder;
 use App\Dto\Order\UnpersistedOrderItem;
 use App\Enums\OrderStatus;
+use App\Events\OrderPaidEvent;
 use App\Exceptions\InsufficientStockException;
+use App\Exceptions\InvalidOrderStateException;
 use App\Exceptions\OrderNotFoundException;
 use App\Exceptions\ProductNotFoundException;
 use App\Models\InventoryHistory\InventoryHistoryModel;
@@ -21,6 +23,7 @@ use App\Services\Order\OrderService;
 use App\Services\Order\OrderStatusMachine;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\Event;
 use PHPUnit\Framework\MockObject\MockObject;
 use Tests\TestCase;
 class OrderServiceTest extends TestCase
@@ -267,6 +270,69 @@ class OrderServiceTest extends TestCase
             ->willReturn($updated);
         $result = $this->service->updateOrder($id, $unpersisted, asAdmin: true);
         $this->assertSame($updated, $result);
+    }
+    public function test_markOrderAsPaid_transitions_pending_order_and_dispatches_event(): void
+    {
+        Event::fake([OrderPaidEvent::class]);
+        $user = UserModel::factory()->create();
+        /** @var OrderModel $orderModel */
+        $orderModel = OrderModel::factory()->create([
+            'status' => OrderStatus::Pending->value,
+            'user_id' => $user->id,
+            'total_price' => 200,
+        ]);
+        $existingOrder = Order::fromModel($orderModel);
+        $updatedModel = OrderModel::factory()->create([
+            'status' => OrderStatus::Paid->value,
+            'user_id' => $user->id,
+            'total_price' => 200,
+        ]);
+        $updated = Order::fromModel($updatedModel);
+        $this->repository->method('findById')->willReturn($existingOrder);
+        $this->repository->method('update')->willReturn($updated);
+        $result = $this->service->markOrderAsPaid(1, 'pay_ref_123');
+        $this->assertSame($updated, $result);
+        Event::assertDispatched(OrderPaidEvent::class, function (OrderPaidEvent $event) use ($updated) {
+            return $event->order->id === $updated->id;
+        });
+    }
+    public function test_markOrderAsPaid_throws_when_order_not_pending(): void
+    {
+        $user = UserModel::factory()->create();
+        /** @var OrderModel $orderModel */
+        $orderModel = OrderModel::factory()->create([
+            'status' => OrderStatus::Shipped->value,
+            'user_id' => $user->id,
+        ]);
+        $existingOrder = Order::fromModel($orderModel);
+        $this->repository->method('findById')->willReturn($existingOrder);
+        $this->expectException(InvalidOrderStateException::class);
+        $this->service->markOrderAsPaid(1, 'pay_ref_123');
+    }
+    public function test_markOrderAsPaid_throws_when_order_not_found(): void
+    {
+        $this->repository->method('findById')->willReturn(null);
+        $this->expectException(OrderNotFoundException::class);
+        $this->service->markOrderAsPaid(999, 'pay_ref_123');
+    }
+    public function test_updateOrder_does_not_dispatch_paid_event(): void
+    {
+        Event::fake([OrderPaidEvent::class]);
+        $user = UserModel::factory()->create();
+        /** @var OrderModel $orderModel */
+        $orderModel = OrderModel::factory()->create(['status' => OrderStatus::Pending->value]);
+        $existingOrder = Order::fromModel($orderModel);
+        $unpersisted = new UnpersistedOrder(
+            userId: $user->id,
+            status: OrderStatus::Cancelled,
+            totalPrice: 200,
+            items: [],
+        );
+        $updated = Order::fromModel(OrderModel::factory()->create(['status' => OrderStatus::Cancelled->value]));
+        $this->repository->method('findById')->willReturn($existingOrder);
+        $this->repository->method('update')->willReturn($updated);
+        $this->service->updateOrder(1, $unpersisted);
+        Event::assertNotDispatched(OrderPaidEvent::class);
     }
     public function test_deleteOrder_returns_true(): void
     {

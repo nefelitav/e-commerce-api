@@ -38,6 +38,12 @@ interface OrderServiceInterface
      * @throws OrderNotFoundException
      * @throws InvalidOrderStateException
      */
+    public function markOrderAsPaid(int $orderId, string $paymentReference): Order;
+
+    /**
+     * @throws OrderNotFoundException
+     * @throws InvalidOrderStateException
+     */
     public function updateOrder(int $id, UnpersistedOrder $unpersistedOrder, bool $asAdmin = false): Order;
 
     /**

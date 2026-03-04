@@ -5,6 +5,8 @@ namespace App\Services\Order;
 use App\Dto\InventoryHistory\UnpersistedInventoryHistoryEntry;
 use App\Dto\Order\Order;
 use App\Dto\Order\UnpersistedOrder;
+use App\Enums\OrderStatus;
+use App\Events\OrderPaidEvent;
 use App\Exceptions\InsufficientStockException;
 use App\Exceptions\InvalidOrderStateException;
 use App\Exceptions\OrderNotFoundException;
@@ -110,6 +112,44 @@ final readonly class OrderService implements OrderServiceInterface
      * @throws OrderNotFoundException
      * @throws InvalidOrderStateException
      */
+    public function markOrderAsPaid(int $orderId, string $paymentReference): Order
+    {
+        $existing = $this->repository->findById($orderId);
+
+        if ($existing === null) {
+            throw new OrderNotFoundException($orderId);
+        }
+
+        if ($existing->status !== OrderStatus::Pending) {
+            throw new InvalidOrderStateException(
+                "Cannot mark order as paid: current status is '{$existing->status->value}', expected 'pending'."
+            );
+        }
+
+        $unpersisted = new UnpersistedOrder(
+            userId: $existing->userId,
+            status: OrderStatus::Paid,
+            totalPrice: $existing->totalPrice,
+            items: [],
+        );
+
+        $updated = $this->repository->update($orderId, $unpersisted);
+
+        $this->auditLogger->log('order.paid', 'order', $orderId, [
+            'payment_reference' => $paymentReference,
+            'previous_status' => $existing->status->value,
+            'total_price' => $existing->totalPrice,
+        ]);
+
+        OrderPaidEvent::dispatch($updated, now()->toIso8601String());
+
+        return $updated;
+    }
+
+    /**
+     * @throws OrderNotFoundException
+     * @throws InvalidOrderStateException
+     */
     public function updateOrder(int $id, UnpersistedOrder $unpersistedOrder, bool $asAdmin = false): Order
     {
         $existing = $this->repository->findById($id);
@@ -132,6 +172,7 @@ final readonly class OrderService implements OrderServiceInterface
             'total_price' => $unpersistedOrder->totalPrice,
             'as_admin' => $asAdmin,
         ]);
+
 
         return $updated;
     }
