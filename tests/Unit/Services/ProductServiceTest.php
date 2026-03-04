@@ -13,6 +13,7 @@ use App\Models\InventoryHistory\InventoryHistoryModel;
 use App\Models\Product\ProductModel;
 use App\Repositories\InventoryHistory\InventoryHistoryRepository;
 use App\Repositories\Product\ProductRepository;
+use App\Services\AuditLogger;
 use App\Services\Product\ProductService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -35,7 +36,7 @@ class ProductServiceTest extends TestCase
 
         $this->repository = $this->createMock(ProductRepository::class);
         $this->inventoryHistoryRepository = $this->createMock(InventoryHistoryRepository::class);
-        $this->service = new ProductService($this->repository, $this->inventoryHistoryRepository);
+        $this->service = new ProductService($this->repository, $this->inventoryHistoryRepository, new AuditLogger());
     }
 
     public function test_listProducts_returns_array_of_products(): void

@@ -10,6 +10,7 @@ use App\CQRS\Handlers\Product\CreateProductCommandHandler;
 use App\Http\Middleware\RequireAdmin;
 use App\Http\Middleware\RequireAuth;
 use App\Repositories\Category\CategoryRepository;
+use App\Services\AuditLogger;
 use App\Services\Category\CategoryService;
 use App\Services\Order\OrderService;
 use App\Services\Order\OrderServiceInterface;
@@ -28,6 +29,7 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->app->singleton(CategoryRepository::class);
         $this->app->singleton(CategoryService::class);
+        $this->app->singleton(AuditLogger::class);
 
         $this->app->bind(ProductServiceInterface::class, ProductService::class);
         $this->app->bind(OrderServiceInterface::class, OrderService::class);

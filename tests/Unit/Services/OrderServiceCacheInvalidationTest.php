@@ -3,7 +3,6 @@
 namespace Tests\Unit\Services;
 
 use App\Dto\InventoryHistory\InventoryHistoryEntry;
-use App\Dto\InventoryHistory\UnpersistedInventoryHistoryEntry;
 use App\Dto\Order\Order;
 use App\Dto\Order\UnpersistedOrder;
 use App\Dto\Order\UnpersistedOrderItem;
@@ -17,6 +16,7 @@ use App\Models\UserModel;
 use App\Repositories\InventoryHistory\InventoryHistoryRepository;
 use App\Repositories\Order\OrderRepository;
 use App\Repositories\Product\ProductRepository;
+use App\Services\AuditLogger;
 use App\Services\Order\OrderService;
 use App\Services\Order\OrderStatusMachine;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -52,6 +52,7 @@ class OrderServiceCacheInvalidationTest extends TestCase
             $this->productRepository,
             $this->inventoryHistoryRepository,
             $this->statusMachine,
+            new AuditLogger(),
         );
     }
 

@@ -8,6 +8,7 @@ use App\Exceptions\CategoryAlreadyExistsException;
 use App\Exceptions\CategoryNotFoundException;
 use App\Models\Category\CategoryModel;
 use App\Repositories\Category\CategoryRepository;
+use App\Services\AuditLogger;
 use App\Services\Category\CategoryService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -26,7 +27,7 @@ class CategoryServiceTest extends TestCase
         parent::setUp();
 
         $this->repository = $this->createMock(CategoryRepository::class);
-        $this->service = new CategoryService($this->repository);
+        $this->service = new CategoryService($this->repository, new AuditLogger());
     }
 
     protected function tearDown(): void

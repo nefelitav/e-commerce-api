@@ -10,6 +10,7 @@ use App\Exceptions\ProductNotFoundException;
 use App\Repositories\InventoryHistory\InventoryHistoryRepository;
 use App\Dto\InventoryHistory\UnpersistedInventoryHistoryEntry;
 use App\Repositories\Product\ProductRepository;
+use App\Services\AuditLogger;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -19,6 +20,7 @@ final readonly class ProductService implements ProductServiceInterface
     public function __construct(
         private ProductRepository $repository,
         private InventoryHistoryRepository $inventoryHistoryRepository,
+        private AuditLogger $auditLogger,
     ) {
     }
 
@@ -81,6 +83,12 @@ final readonly class ProductService implements ProductServiceInterface
 
         Cache::tags(['products'])->flush();
 
+        $this->auditLogger->log('product.created', 'product', $created->id, [
+            'name' => $created->name,
+            'price' => $created->price,
+            'quantity' => $created->quantity,
+        ]);
+
         return $created;
     }
 
@@ -127,6 +135,12 @@ final readonly class ProductService implements ProductServiceInterface
         Cache::forget("products.{$id}");
         Cache::tags(['products'])->flush();
 
+        $this->auditLogger->log('product.updated', 'product', $id, [
+            'name' => $updated->name,
+            'price' => $updated->price,
+            'quantity' => $updated->quantity,
+        ]);
+
         return $updated;
     }
 
@@ -139,6 +153,8 @@ final readonly class ProductService implements ProductServiceInterface
 
         Cache::forget("products.{$id}");
         Cache::tags(['products'])->flush();
+
+        $this->auditLogger->log('product.deleted', 'product', $id);
 
         return $result;
     }

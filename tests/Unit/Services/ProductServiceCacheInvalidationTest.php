@@ -11,6 +11,7 @@ use App\Models\InventoryHistory\InventoryHistoryModel;
 use App\Models\Product\ProductModel;
 use App\Repositories\InventoryHistory\InventoryHistoryRepository;
 use App\Repositories\Product\ProductRepository;
+use App\Services\AuditLogger;
 use App\Services\Product\ProductService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
@@ -34,7 +35,7 @@ class ProductServiceCacheInvalidationTest extends TestCase
         Cache::tags(['products'])->flush();
         $this->repository = $this->createMock(ProductRepository::class);
         $this->inventoryHistoryRepository = $this->createMock(InventoryHistoryRepository::class);
-        $this->service = new ProductService($this->repository, $this->inventoryHistoryRepository);
+        $this->service = new ProductService($this->repository, $this->inventoryHistoryRepository, new AuditLogger());
     }
 
     protected function tearDown(): void

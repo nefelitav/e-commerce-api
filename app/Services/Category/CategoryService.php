@@ -7,6 +7,7 @@ use App\Dto\Category\UnpersistedCategory;
 use App\Exceptions\CategoryAlreadyExistsException;
 use App\Exceptions\CategoryNotFoundException;
 use App\Repositories\Category\CategoryRepository;
+use App\Services\AuditLogger;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Cache;
 
@@ -14,6 +15,7 @@ final readonly class CategoryService
 {
     public function __construct(
         private CategoryRepository $repository,
+        private AuditLogger $auditLogger,
     ) {
     }
 
@@ -61,6 +63,11 @@ final readonly class CategoryService
 
         Cache::tags(['categories'])->flush();
 
+        $this->auditLogger->log('category.created', 'category', $category->id, [
+            'name' => $category->name,
+            'parent_id' => $category->parentId,
+        ]);
+
         return $category;
     }
 
@@ -80,6 +87,11 @@ final readonly class CategoryService
 
         Cache::tags(['categories'])->flush();
 
+        $this->auditLogger->log('category.updated', 'category', $id, [
+            'name' => $category->name,
+            'parent_id' => $category->parentId,
+        ]);
+
         return $category;
     }
 
@@ -91,6 +103,8 @@ final readonly class CategoryService
         $result = $this->repository->delete($id);
 
         Cache::tags(['categories'])->flush();
+
+        $this->auditLogger->log('category.deleted', 'category', $id);
 
         return $result;
     }

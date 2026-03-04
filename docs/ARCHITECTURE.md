@@ -10,8 +10,9 @@
 7. [Order Placement & Inventory](#order-placement--inventory)
 8. [Order Status Machine](#order-status-machine)
 9. [Caching](#caching)
-10. [Error Handling](#error-handling)
-11. [Extension Points](#extension-points)
+10. [Audit Logging](#audit-logging)
+11. [Error Handling](#error-handling)
+12. [Extension Points](#extension-points)
 
 ---
 
@@ -1114,6 +1115,71 @@ If a write operation throws an exception (e.g., `ProductAlreadyExistsException`,
 
 ---
 
+## Audit Logging
+
+All create, update, and delete operations are recorded to a dedicated audit log for traceability and compliance.
+
+### Implementation
+
+**Location:** `app/Services/AuditLogger.php`
+
+The `AuditLogger` is a singleton service injected into all domain services (`ProductService`, `CategoryService`, `OrderService`). It writes structured log entries to a dedicated `audit` channel after every successful mutation.
+
+### What is logged
+
+| Service | Actions logged |
+|---------|---------------|
+| **ProductService** | `product.created`, `product.updated`, `product.deleted` |
+| **CategoryService** | `category.created`, `category.updated`, `category.deleted` |
+| **OrderService** | `order.created`, `order.updated`, `order.deleted` |
+
+### Log entry structure
+
+Each audit log entry contains:
+
+| Field | Description |
+|-------|-------------|
+| `action` | The operation performed (e.g. `product.created`) |
+| `entity` | The entity type (e.g. `product`, `order`) |
+| `entity_id` | The ID of the affected entity |
+| `user_id` | The authenticated user who performed the action (null if unauthenticated) |
+| `properties` | Action-specific data (e.g. name, price, status changes) |
+| `ip` | The IP address of the request |
+| `timestamp` | ISO 8601 timestamp of the action |
+
+### Log channel configuration
+
+The audit log writes to a separate daily file at `storage/logs/audit.log` with 90-day retention:
+
+```php
+// config/logging.php
+'audit' => [
+    'driver' => 'daily',
+    'path'   => storage_path('logs/audit.log'),
+    'level'  => 'info',
+    'days'   => 90,
+],
+```
+
+### Example log entries
+
+**Product created:**
+```
+[2026-03-04T10:30:00+00:00] local.INFO: product.created {"entity":"product","entity_id":42,"user_id":1,"action":"product.created","properties":{"name":"Gaming Laptop","price":1299.99,"quantity":10},"ip":"127.0.0.1","timestamp":"2026-03-04T10:30:00+00:00"}
+```
+
+**Order status updated:**
+```
+[2026-03-04T11:00:00+00:00] local.INFO: order.updated {"entity":"order","entity_id":7,"user_id":1,"action":"order.updated","properties":{"previous_status":"pending","new_status":"paid","total_price":299.99,"as_admin":true},"ip":"127.0.0.1","timestamp":"2026-03-04T11:00:00+00:00"}
+```
+
+### Design decisions
+
+- **Service layer, not middleware:** Audit logs are written from the service layer (after successful mutations) rather than as HTTP middleware. This ensures only successful operations are logged and the log captures domain-level context (e.g. previous status, quantity changes).
+- **After success only:** If a mutation throws (e.g. `InsufficientStockException`), no audit entry is written — nothing changed.
+- **Dedicated channel:** Audit logs are separated from application logs for easy searching, retention policies, and potential forwarding to external audit systems.
+
+---
 
 
 ### Exception Hierarchy

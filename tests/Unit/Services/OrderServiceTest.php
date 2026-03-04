@@ -16,6 +16,7 @@ use App\Models\UserModel;
 use App\Repositories\InventoryHistory\InventoryHistoryRepository;
 use App\Repositories\Order\OrderRepository;
 use App\Repositories\Product\ProductRepository;
+use App\Services\AuditLogger;
 use App\Services\Order\OrderService;
 use App\Services\Order\OrderStatusMachine;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -46,6 +47,7 @@ class OrderServiceTest extends TestCase
             $this->productRepository,
             $this->inventoryHistoryRepository,
             $this->statusMachine,
+            new AuditLogger(),
         );
     }
     public function test_listOrders_returns_paginator_of_orders(): void

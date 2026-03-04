@@ -156,13 +156,19 @@
 - Cache keys derived from query parameters via `md5(serialize())` for list endpoints
 - Configurable cache driver via `CACHE_STORE` env var (`array` for dev, `redis` for production)
 
-### 7. **Standardized Responses**
+### 7. **Audit Logging**
+- All create, update, and delete operations logged to dedicated `audit` channel
+- Structured log entries with entity, action, user, properties, IP, and timestamp
+- Separate daily log file (`storage/logs/audit.log`) with 90-day retention
+- Logged at the service layer — only successful mutations are recorded
+
+### 8. **Standardized Responses**
 - Consistent JSON format
 - Pagination metadata
 - Success/error indicators
 - Helpful messages
 
-### 8. **Request Validation**
+### 9. **Request Validation**
 - Validate all input parameters
 - Type checking (integer, string, numeric)
 - Range validation
@@ -219,6 +225,7 @@ app/
 │   ├── Order/
 │   └── Product/
 ├── Services/                     # Business Logic Layer
+│   ├── AuditLogger.php
 │   ├── Category/
 │   ├── InventoryHistory/
 │   ├── Order/

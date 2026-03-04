@@ -12,6 +12,7 @@ use App\Exceptions\ProductNotFoundException;
 use App\Repositories\InventoryHistory\InventoryHistoryRepository;
 use App\Repositories\Order\OrderRepository;
 use App\Repositories\Product\ProductRepository;
+use App\Services\AuditLogger;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -23,6 +24,7 @@ final readonly class OrderService implements OrderServiceInterface
         private ProductRepository $productRepository,
         private InventoryHistoryRepository $inventoryHistoryRepository,
         private OrderStatusMachine $statusMachine,
+        private AuditLogger $auditLogger,
     ) {
     }
 
@@ -95,6 +97,12 @@ final readonly class OrderService implements OrderServiceInterface
         }
         Cache::tags(['products'])->flush();
 
+        $this->auditLogger->log('order.created', 'order', $order->id, [
+            'status' => $order->status,
+            'total_price' => $order->totalPrice,
+            'item_count' => count($order->items),
+        ]);
+
         return $order;
     }
 
@@ -116,7 +124,16 @@ final readonly class OrderService implements OrderServiceInterface
             $this->statusMachine->assertUserTransitionAllowed($existing, $unpersistedOrder->status);
         }
 
-        return $this->repository->update($id, $unpersistedOrder);
+        $updated = $this->repository->update($id, $unpersistedOrder);
+
+        $this->auditLogger->log('order.updated', 'order', $id, [
+            'previous_status' => $existing->status,
+            'new_status' => $unpersistedOrder->status,
+            'total_price' => $unpersistedOrder->totalPrice,
+            'as_admin' => $asAdmin,
+        ]);
+
+        return $updated;
     }
 
     /**
@@ -124,6 +141,10 @@ final readonly class OrderService implements OrderServiceInterface
      */
     public function deleteOrder(int $id): bool
     {
-        return $this->repository->delete($id);
+        $result = $this->repository->delete($id);
+
+        $this->auditLogger->log('order.deleted', 'order', $id);
+
+        return $result;
     }
 }
