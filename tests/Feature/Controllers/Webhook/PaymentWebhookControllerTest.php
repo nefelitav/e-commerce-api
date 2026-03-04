@@ -112,5 +112,69 @@ class PaymentWebhookControllerTest extends TestCase
 
         $response->assertStatus(Response::HTTP_OK);
     }
+
+    public function test_payment_webhook_rejects_missing_signature_when_secret_configured(): void
+    {
+        config(['webhooks.signing_secret' => 'test-secret-key']);
+
+        $order = OrderModel::factory()->create(['status' => 'pending']);
+
+        $response = $this->postJson(route('v1.webhooks.payments'), [
+            'order_id' => $order->id,
+            'payment_reference' => 'pay_abc123',
+            'status' => 'paid',
+        ]);
+
+        $response->assertStatus(Response::HTTP_FORBIDDEN);
+    }
+
+    public function test_payment_webhook_rejects_invalid_signature(): void
+    {
+        config(['webhooks.signing_secret' => 'test-secret-key']);
+
+        $order = OrderModel::factory()->create(['status' => 'pending']);
+
+        $response = $this->postJson(
+            route('v1.webhooks.payments'),
+            [
+                'order_id' => $order->id,
+                'payment_reference' => 'pay_abc123',
+                'status' => 'paid',
+            ],
+            ['X-Webhook-Signature' => 'invalid-signature'],
+        );
+
+        $response->assertStatus(Response::HTTP_FORBIDDEN);
+    }
+
+    public function test_payment_webhook_accepts_valid_signature(): void
+    {
+        Event::fake([OrderPaidEvent::class]);
+
+        $secret = 'test-secret-key';
+        config(['webhooks.signing_secret' => $secret]);
+
+        $order = OrderModel::factory()->create(['status' => 'pending']);
+
+        $payload = [
+            'order_id' => $order->id,
+            'payment_reference' => 'pay_signed123',
+            'status' => 'paid',
+        ];
+
+        $signature = hash_hmac('sha256', (string) json_encode($payload), $secret);
+
+        $response = $this->postJson(
+            route('v1.webhooks.payments'),
+            $payload,
+            ['X-Webhook-Signature' => $signature],
+        );
+
+        $response->assertStatus(Response::HTTP_OK);
+        $this->assertDatabaseHas('orders', [
+            'id' => $order->id,
+            'status' => 'paid',
+        ]);
+    }
 }
 

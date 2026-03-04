@@ -9,8 +9,8 @@ use App\Dto\Product\UnpersistedProduct;
 use App\Exceptions\ProductNotFoundException;
 use App\Models\InventoryHistory\InventoryHistoryModel;
 use App\Models\Product\ProductModel;
-use App\Repositories\InventoryHistory\InventoryHistoryRepository;
-use App\Repositories\Product\ProductRepository;
+use App\Repositories\InventoryHistory\InventoryHistoryRepositoryInterface;
+use App\Repositories\Product\ProductRepositoryInterface;
 use App\Services\AuditLogger;
 use App\Services\Product\ProductService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -22,10 +22,10 @@ class ProductServiceCacheInvalidationTest extends TestCase
 {
     use RefreshDatabase;
 
-    /** @var ProductRepository&MockObject */
-    private ProductRepository $repository;
-    /** @var InventoryHistoryRepository&MockObject */
-    private InventoryHistoryRepository $inventoryHistoryRepository;
+    /** @var ProductRepositoryInterface&MockObject */
+    private ProductRepositoryInterface $repository;
+    /** @var InventoryHistoryRepositoryInterface&MockObject */
+    private InventoryHistoryRepositoryInterface $inventoryHistoryRepository;
     private ProductService $service;
 
     protected function setUp(): void
@@ -33,8 +33,8 @@ class ProductServiceCacheInvalidationTest extends TestCase
         parent::setUp();
 
         Cache::tags(['products'])->flush();
-        $this->repository = $this->createMock(ProductRepository::class);
-        $this->inventoryHistoryRepository = $this->createMock(InventoryHistoryRepository::class);
+        $this->repository = $this->createMock(ProductRepositoryInterface::class);
+        $this->inventoryHistoryRepository = $this->createMock(InventoryHistoryRepositoryInterface::class);
         $this->service = new ProductService($this->repository, $this->inventoryHistoryRepository, new AuditLogger());
     }
 

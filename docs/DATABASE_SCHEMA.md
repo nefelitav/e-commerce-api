@@ -280,14 +280,16 @@ CREATE INDEX idx_order_items_product_id ON order_items(product_id);
 
 **Structure:**
 ```
-Column Name    Type          Constraints        Description
-────────────────────────────────────────────────────────────
-id             bigint        PK, Auto-inc       History ID
-product_id     bigint        FK, NOT NULL       Product reference
-quantity_change integer      NOT NULL           Change amount
-reason         string        NOT NULL           Change reason
-created_at     timestamp     DEFAULT NULL       Creation timestamp
-updated_at     timestamp     DEFAULT NULL       Last update timestamp
+Column Name        Type          Constraints        Description
+──────────────────────────────────────────────────────────────────
+id                 bigint        PK, Auto-inc       History ID
+product_id         bigint        FK, NOT NULL       Product reference
+change_type        enum          NOT NULL, indexed   Type of change (backed by InventoryChangeType enum)
+quantity_changed   integer       NOT NULL           Change amount (negative for deductions)
+previous_quantity  integer       NOT NULL           Stock before change
+new_quantity       integer       NOT NULL           Stock after change
+created_at         timestamp     DEFAULT NULL       Creation timestamp
+updated_at         timestamp     DEFAULT NULL       Last update timestamp
 ```
 
 **SQL:**
@@ -295,22 +297,25 @@ updated_at     timestamp     DEFAULT NULL       Last update timestamp
 CREATE TABLE inventory_history (
     id BIGINT PRIMARY KEY AUTOINCREMENT,
     product_id BIGINT NOT NULL REFERENCES products(id),
-    quantity_change INTEGER NOT NULL,
-    reason VARCHAR(255) NOT NULL,
+    change_type ENUM('addition','removal','sale','return','adjustment','transfer') NOT NULL,
+    quantity_changed INTEGER NOT NULL,
+    previous_quantity INTEGER NOT NULL,
+    new_quantity INTEGER NOT NULL,
     created_at TIMESTAMP,
     updated_at TIMESTAMP
 );
 
 CREATE INDEX idx_inventory_history_product_id ON inventory_history(product_id);
+CREATE INDEX idx_inventory_history_change_type ON inventory_history(change_type);
 ```
 
-**Reason Examples:**
-- `initial` - Initial inventory
-- `purchase` - Purchased from supplier
-- `sale` - Sold to customer
+**Change Type Values (App\Enums\InventoryChangeType):**
+- `addition` - Product created or stock added
+- `removal` - Stock removed manually
+- `sale` - Sold to customer (order placed)
 - `return` - Customer return
-- `adjustment` - Inventory adjustment
-- `damage` - Damaged goods
+- `adjustment` - Admin inventory adjustment
+- `transfer` - Stock transferred
 
 ---
 

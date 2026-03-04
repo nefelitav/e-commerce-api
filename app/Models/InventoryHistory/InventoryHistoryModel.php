@@ -19,6 +19,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int $new_quantity
  * @property ProductModel $product
  * @method static static create(array<mixed> $attributes = [])
+ * @method static static|null find(int|string $id, array<int, string> $columns = ['*'])
  */
 class InventoryHistoryModel extends Model
 {

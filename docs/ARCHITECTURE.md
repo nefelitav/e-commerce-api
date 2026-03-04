@@ -105,16 +105,20 @@ The Shop API follows a **layered hexagonal architecture** with clear separation 
 
 **Purpose:** Abstract data access logic from business logic
 
-**Location:** `app/Repositories/[Resource]/[Resource]Repository.php`
+**Location:**
+- Interfaces: `app/Repositories/[Resource]/[Resource]RepositoryInterface.php`
+- Implementations: `app/Repositories/[Resource]/[Resource]Repository.php`
 
 **Responsibilities:**
 - Build database queries
 - Execute queries
 - Return data objects
 
+Services depend on repository **interfaces**, not concrete implementations. Bindings are registered in `AppServiceProvider`.
+
 **Example:**
 ```php
-class ProductRepository
+class ProductRepository implements ProductRepositoryInterface
 {
     public function getAll(
         int $page = 1,
@@ -902,13 +906,25 @@ All five steps above run inside one `DB::transaction`. If any product has insuff
 
 ### Inventory history
 
-Every stock movement is recorded in `inventory_history`:
+Every stock movement is recorded in `inventory_history`. The `change_type` column is backed by the `App\Enums\InventoryChangeType` enum for compile-time type safety:
 
 | Event | `change_type` | `quantity_changed` |
 |-------|---------------|--------------------|
 | Product created | `addition` | `+initialQty` |
 | Admin adjusts quantity | `adjustment` | `±delta` |
 | Order placed | `sale` | `-orderedQty` |
+| Order deleted | `return` | `+restoredQty` |
+
+### Order deletion and inventory restoration
+
+When an order is deleted, `OrderService::deleteOrder()` restores stock for every item in the order within a single transaction:
+
+1. Looks up the order and its items
+2. For each item, acquires a pessimistic lock on the product row (`FOR UPDATE`)
+3. Restores the deducted quantity back to the product
+4. Records an inventory history entry with `change_type = return`
+5. Deletes the order and its items
+6. Flushes the product cache
 
 ---
 
@@ -984,21 +1000,21 @@ Enforces the **complete lifecycle** for operators. Every valid transition:
 
 | From | To |
 |------|----|
-| `pending` | `cancelled` |
+| `pending` | `paid`, `cancelled` |
 | `paid` | `shipped`, `refunded` |
 | `shipped` | `delivered` |
 | `delivered` | `refunded` |
 | `cancelled` | *(terminal — no outgoing transitions)* |
 | `refunded` | *(terminal — no outgoing transitions)* |
 
-> **Note:** The `pending → paid` transition is **not** an admin action. It is triggered by an external payment provider via the `POST /api/v1/webhooks/payments` endpoint, which calls `OrderService::markOrderAsPaid()`.
+> **Note:** The `pending → paid` transition can happen in two ways: (1) automatically via the external payment provider webhook at `POST /api/v1/webhooks/payments`, which calls `OrderService::markOrderAsPaid()`, or (2) manually by an admin through the standard order update endpoint.
 
 Admins go through the machine too — they are not exempt. This means attempting to skip a step (e.g. `paid → delivered`) or resurrect a terminal order (`cancelled → pending`) throws the same `InvalidOrderStateException`.
 
 ### Class anatomy
 
 ```php
-class OrderStatusMachine
+final readonly class OrderStatusMachine implements OrderStatusMachineInterface
 {
     // ── constants ──────────────────────────────────────────────────────────
     private const CANCELLATION_WINDOW_HOURS = 24;
@@ -1242,7 +1258,9 @@ HTTP POST → configured outbound webhook URL
 POST /api/v1/webhooks/payments
 ```
 
-**Auth:** None (public endpoint for external provider callbacks)
+**Auth:** HMAC-SHA256 signature verification (when `WEBHOOK_SIGNING_SECRET` is configured)
+
+The payment provider must include an `X-Webhook-Signature` header containing the HMAC-SHA256 hash of the raw request body, signed with the shared secret. When `WEBHOOK_SIGNING_SECRET` is not set, signature verification is skipped (development/testing only).
 
 **Request body:**
 ```json
@@ -1254,6 +1272,7 @@ POST /api/v1/webhooks/payments
 ```
 
 The endpoint validates that:
+- The webhook signature is valid (when signing secret is configured)
 - The order exists
 - The status field is `paid`
 - The order is currently in `pending` status (otherwise returns 400)

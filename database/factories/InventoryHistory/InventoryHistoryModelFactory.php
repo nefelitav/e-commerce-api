@@ -2,6 +2,7 @@
 
 namespace Database\Factories\InventoryHistory;
 
+use App\Enums\InventoryChangeType;
 use App\Models\InventoryHistory\InventoryHistoryModel;
 use App\Models\Product\ProductModel;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -26,14 +27,7 @@ class InventoryHistoryModelFactory extends Factory
 
         return [
             'product_id' => ProductModel::factory(),
-            'change_type' => $this->faker->randomElement([
-                'addition',
-                'removal',
-                'sale',
-                'return',
-                'adjustment',
-                'transfer',
-            ]),
+            'change_type' => $this->faker->randomElement(array_column(InventoryChangeType::cases(), 'value')),
             'quantity_changed' => $new - $previous,
             'previous_quantity' => $previous,
             'new_quantity' => $new,

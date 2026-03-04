@@ -17,10 +17,20 @@ use App\Listeners\SendOrderPaidEmail;
 use App\Listeners\SendOrderPaidWebhook;
 use App\Listeners\SendOrderShippedEmail;
 use App\Repositories\Category\CategoryRepository;
+use App\Repositories\Category\CategoryRepositoryInterface;
+use App\Repositories\InventoryHistory\InventoryHistoryRepository;
+use App\Repositories\InventoryHistory\InventoryHistoryRepositoryInterface;
+use App\Repositories\Order\OrderRepository;
+use App\Repositories\Order\OrderRepositoryInterface;
+use App\Repositories\Product\ProductRepository;
+use App\Repositories\Product\ProductRepositoryInterface;
 use App\Services\AuditLogger;
 use App\Services\Category\CategoryService;
+use App\Services\Category\CategoryServiceInterface;
 use App\Services\Order\OrderService;
 use App\Services\Order\OrderServiceInterface;
+use App\Services\Order\OrderStatusMachine;
+use App\Services\Order\OrderStatusMachineInterface;
 use App\Services\Product\ProductService;
 use App\Services\Product\ProductServiceInterface;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -35,12 +45,19 @@ class AppServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        $this->app->singleton(CategoryRepository::class);
-        $this->app->singleton(CategoryService::class);
         $this->app->singleton(AuditLogger::class);
 
+        // Repository bindings
+        $this->app->bind(ProductRepositoryInterface::class, ProductRepository::class);
+        $this->app->bind(OrderRepositoryInterface::class, OrderRepository::class);
+        $this->app->bind(CategoryRepositoryInterface::class, CategoryRepository::class);
+        $this->app->bind(InventoryHistoryRepositoryInterface::class, InventoryHistoryRepository::class);
+
+        // Service bindings
         $this->app->bind(ProductServiceInterface::class, ProductService::class);
         $this->app->bind(OrderServiceInterface::class, OrderService::class);
+        $this->app->bind(CategoryServiceInterface::class, CategoryService::class);
+        $this->app->bind(OrderStatusMachineInterface::class, OrderStatusMachine::class);
 
         $this->app->singleton(CommandBus::class, function ($app) {
             return new CommandBus(

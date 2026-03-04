@@ -2,11 +2,13 @@
 
 namespace App\Dto\InventoryHistory;
 
+use App\Enums\InventoryChangeType;
+
 final readonly class UnpersistedInventoryHistoryEntry
 {
     public function __construct(
         public int $productId,
-        public string $changeType,
+        public InventoryChangeType $changeType,
         public int $quantityChanged,
         public int $previousQuantity,
         public int $newQuantity,
@@ -19,7 +21,7 @@ final readonly class UnpersistedInventoryHistoryEntry
     {
         return [
             'product_id' => $this->productId,
-            'change_type' => $this->changeType,
+            'change_type' => $this->changeType->value,
             'quantity_changed' => $this->quantityChanged,
             'previous_quantity' => $this->previousQuantity,
             'new_quantity' => $this->newQuantity,

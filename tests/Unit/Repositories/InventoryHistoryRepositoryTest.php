@@ -3,6 +3,7 @@
 namespace Tests\Unit\Repositories;
 
 use App\Dto\InventoryHistory\UnpersistedInventoryHistoryEntry;
+use App\Enums\InventoryChangeType;
 use App\Models\InventoryHistory\InventoryHistoryModel;
 use App\Models\Product\ProductModel;
 use App\Repositories\InventoryHistory\InventoryHistoryRepository;
@@ -41,7 +42,7 @@ class InventoryHistoryRepositoryTest extends TestCase
 
         $entry = new UnpersistedInventoryHistoryEntry(
             productId: $product->id,
-            changeType: 'adjustment',
+            changeType: InventoryChangeType::Adjustment,
             quantityChanged: 5,
             previousQuantity: 10,
             newQuantity: 15,

@@ -11,7 +11,7 @@ use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
-class ProductRepository
+class ProductRepository implements ProductRepositoryInterface
 {
     private const TTL = 300;
 
@@ -73,12 +73,15 @@ class ProductRepository
 
             $paginator = $query->paginate($perPage, ['*'], 'page', $page);
 
-            /** @var Collection<int, Product> $items */
-            $items = $paginator->getCollection()->map(fn($model) => Product::fromModel($model));
+            $items = $paginator->getCollection()->map(fn(ProductModel $model) => Product::fromModel($model));
 
-            $paginator->setCollection($items);
-
-            return $paginator;
+            return new LengthAwarePaginator(
+                $items,
+                $paginator->total(),
+                $paginator->perPage(),
+                $paginator->currentPage(),
+                ['path' => LengthAwarePaginator::resolveCurrentPath()],
+            );
         });
 
         return $result;

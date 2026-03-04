@@ -7,7 +7,7 @@ use App\Dto\InventoryHistory\UnpersistedInventoryHistoryEntry;
 use App\Models\InventoryHistory\InventoryHistoryModel;
 use Illuminate\Database\Eloquent\Collection;
 
-class InventoryHistoryRepository
+class InventoryHistoryRepository implements InventoryHistoryRepositoryInterface
 {
     /**
      * @return array<InventoryHistoryEntry>

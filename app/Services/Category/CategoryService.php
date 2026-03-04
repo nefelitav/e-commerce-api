@@ -6,15 +6,15 @@ use App\Dto\Category\Category;
 use App\Dto\Category\UnpersistedCategory;
 use App\Exceptions\CategoryAlreadyExistsException;
 use App\Exceptions\CategoryNotFoundException;
-use App\Repositories\Category\CategoryRepository;
+use App\Repositories\Category\CategoryRepositoryInterface;
 use App\Services\AuditLogger;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Cache;
 
-final readonly class CategoryService
+final readonly class CategoryService implements CategoryServiceInterface
 {
     public function __construct(
-        private CategoryRepository $repository,
+        private CategoryRepositoryInterface $repository,
         private AuditLogger $auditLogger,
     ) {
     }
@@ -79,7 +79,7 @@ final readonly class CategoryService
     {
         $existing = $this->repository->findByName($unpersistedCategory->name);
 
-        if ($existing) {
+        if ($existing && $existing->id !== $id) {
             throw new CategoryAlreadyExistsException($unpersistedCategory->name);
         }
 

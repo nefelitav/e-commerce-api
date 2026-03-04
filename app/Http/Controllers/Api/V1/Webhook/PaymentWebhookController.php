@@ -8,6 +8,7 @@ use App\Exceptions\OrderNotFoundException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Webhook\PaymentWebhookRequest;
 use App\Http\Responses\ApiResponse;
+use App\Http\Responses\Webhook\PaymentWebhookResponse;
 use App\Services\Order\OrderService;
 use App\Transformers\OrderTransformer;
 use Illuminate\Http\JsonResponse;
@@ -46,10 +47,7 @@ final readonly class PaymentWebhookController extends Controller
             'payment_reference' => $paymentReference,
         ]);
 
-        return response()->json([
-            'success' => true,
-            'data' => $orderData,
-        ], Response::HTTP_OK);
+        return self::success(new PaymentWebhookResponse($orderData), Response::HTTP_OK);
     }
 }
 

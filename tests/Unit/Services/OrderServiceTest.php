@@ -5,6 +5,7 @@ use App\Dto\InventoryHistory\UnpersistedInventoryHistoryEntry;
 use App\Dto\Order\Order;
 use App\Dto\Order\UnpersistedOrder;
 use App\Dto\Order\UnpersistedOrderItem;
+use App\Enums\InventoryChangeType;
 use App\Enums\OrderStatus;
 use App\Events\OrderCreatedEvent;
 use App\Events\OrderPaidEvent;
@@ -17,12 +18,13 @@ use App\Models\InventoryHistory\InventoryHistoryModel;
 use App\Models\Order\OrderModel;
 use App\Models\Product\ProductModel;
 use App\Models\UserModel;
-use App\Repositories\InventoryHistory\InventoryHistoryRepository;
-use App\Repositories\Order\OrderRepository;
-use App\Repositories\Product\ProductRepository;
+use App\Repositories\InventoryHistory\InventoryHistoryRepositoryInterface;
+use App\Repositories\Order\OrderRepositoryInterface;
+use App\Repositories\Product\ProductRepositoryInterface;
 use App\Services\AuditLogger;
 use App\Services\Order\OrderService;
 use App\Services\Order\OrderStatusMachine;
+use App\Services\Order\OrderStatusMachineInterface;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Event;
@@ -31,22 +33,22 @@ use Tests\TestCase;
 class OrderServiceTest extends TestCase
 {
     use RefreshDatabase;
-    /** @var OrderRepository&MockObject */
-    private OrderRepository $repository;
-    /** @var ProductRepository&MockObject */
-    private ProductRepository $productRepository;
-    /** @var InventoryHistoryRepository&MockObject */
-    private InventoryHistoryRepository $inventoryHistoryRepository;
-    /** @var OrderStatusMachine&MockObject */
-    private OrderStatusMachine $statusMachine;
+    /** @var OrderRepositoryInterface&MockObject */
+    private OrderRepositoryInterface $repository;
+    /** @var ProductRepositoryInterface&MockObject */
+    private ProductRepositoryInterface $productRepository;
+    /** @var InventoryHistoryRepositoryInterface&MockObject */
+    private InventoryHistoryRepositoryInterface $inventoryHistoryRepository;
+    /** @var OrderStatusMachineInterface&MockObject */
+    private OrderStatusMachineInterface $statusMachine;
     private OrderService $service;
     protected function setUp(): void
     {
         parent::setUp();
-        $this->repository                 = $this->createMock(OrderRepository::class);
-        $this->productRepository          = $this->createMock(ProductRepository::class);
-        $this->inventoryHistoryRepository = $this->createMock(InventoryHistoryRepository::class);
-        $this->statusMachine              = $this->createMock(OrderStatusMachine::class);
+        $this->repository                 = $this->createMock(OrderRepositoryInterface::class);
+        $this->productRepository          = $this->createMock(ProductRepositoryInterface::class);
+        $this->inventoryHistoryRepository = $this->createMock(InventoryHistoryRepositoryInterface::class);
+        $this->statusMachine              = $this->createMock(OrderStatusMachineInterface::class);
         $this->service = new OrderService(
             $this->repository,
             $this->productRepository,
@@ -59,8 +61,7 @@ class OrderServiceTest extends TestCase
     {
         $orderModel = OrderModel::factory()->create();
         $order      = Order::fromModel($orderModel);
-        $paginator = \Mockery::mock(LengthAwarePaginator::class);
-        $paginator->shouldReceive('items')->andReturn([$order]);
+        $paginator = new LengthAwarePaginator([$order], 1, 15, 1);
         $this->repository
             ->expects($this->once())
             ->method('getAll')
@@ -118,7 +119,7 @@ class OrderServiceTest extends TestCase
             ->method('record')
             ->with($this->callback(function (UnpersistedInventoryHistoryEntry $entry) use ($productModel) {
                 return $entry->productId       === $productModel->id
-                    && $entry->changeType      === 'sale'
+                    && $entry->changeType      === InventoryChangeType::Sale
                     && $entry->previousQuantity === 10
                     && $entry->newQuantity      === 7
                     && $entry->quantityChanged  === -3;
@@ -403,15 +404,57 @@ class OrderServiceTest extends TestCase
         $this->service->updateOrder(1, $unpersisted);
         Event::assertNotDispatched(OrderShippedEvent::class);
     }
-    public function test_deleteOrder_returns_true(): void
+    public function test_deleteOrder_restores_inventory_and_returns_true(): void
     {
-        $id = 1;
+        $user = UserModel::factory()->create();
+        /** @var ProductModel $productModel */
+        $productModel = ProductModel::factory()->create(['quantity' => 7]);
+        $orderModel = OrderModel::factory()->create([
+            'user_id' => $user->id,
+            'status' => OrderStatus::Pending->value,
+        ]);
+        $order = new Order(
+            id: $orderModel->id,
+            userId: $user->id,
+            status: OrderStatus::Pending,
+            totalPrice: 150,
+            createdAt: (string) $orderModel->created_at,
+            items: [
+                new \App\Dto\Order\OrderItem(
+                    id: 1,
+                    orderId: $orderModel->id,
+                    productId: $productModel->id,
+                    quantity: 3,
+                    unitPrice: 50.0,
+                ),
+            ],
+        );
+        $this->repository
+            ->method('findById')
+            ->with($orderModel->id)
+            ->willReturn($order);
+        $this->productRepository
+            ->expects($this->once())
+            ->method('findByIdForUpdate')
+            ->with($productModel->id)
+            ->willReturn($productModel);
+        $this->inventoryHistoryRepository
+            ->expects($this->once())
+            ->method('record')
+            ->with($this->callback(function (UnpersistedInventoryHistoryEntry $entry) use ($productModel) {
+                return $entry->productId === $productModel->id
+                    && $entry->changeType === InventoryChangeType::Return
+                    && $entry->quantityChanged === 3
+                    && $entry->previousQuantity === 7
+                    && $entry->newQuantity === 10;
+            }))
+            ->willReturn(InventoryHistoryEntry::fromModel(InventoryHistoryModel::factory()->create()));
         $this->repository
             ->expects($this->once())
             ->method('delete')
-            ->with($id)
+            ->with($orderModel->id)
             ->willReturn(true);
-        $result = $this->service->deleteOrder($id);
+        $result = $this->service->deleteOrder($orderModel->id);
         $this->assertTrue($result);
     }
     public function test_deleteOrder_throws_OrderNotFoundException(): void
@@ -419,9 +462,9 @@ class OrderServiceTest extends TestCase
         $id = 1;
         $this->repository
             ->expects($this->once())
-            ->method('delete')
+            ->method('findById')
             ->with($id)
-            ->willThrowException(new OrderNotFoundException($id));
+            ->willReturn(null);
         $this->expectException(OrderNotFoundException::class);
         $this->service->deleteOrder($id);
     }

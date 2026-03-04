@@ -7,10 +7,10 @@ use App\Http\Responses\ArrayableResponse;
 final readonly class CreateProductResponse implements ArrayableResponse
 {
     /**
-     * @param array<string, mixed> $category
+     * @param array<string, mixed> $product
      */
     public function __construct(
-        private array $category
+        private array $product
     ) {}
 
     /**
@@ -19,8 +19,8 @@ final readonly class CreateProductResponse implements ArrayableResponse
     public function toArray(): array
     {
         return [
-            'data' => $this->category,
-            'message' => 'Product updated successfully',
+            'data' => $this->product,
+            'message' => 'Product created successfully',
         ];
     }
 }

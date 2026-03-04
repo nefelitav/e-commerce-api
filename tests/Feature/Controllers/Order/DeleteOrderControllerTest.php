@@ -38,11 +38,12 @@ class DeleteOrderControllerTest extends TestCase
         $this->actingAs($admin);
 
         $order = OrderModel::factory()->create();
-        $product = ProductModel::factory()->create();
+        $product = ProductModel::factory()->create(['quantity' => 7]);
 
         OrderItemModel::factory()->create([
             'order_id' => $order->id,
             'product_id' => $product->id,
+            'quantity' => 3,
         ]);
 
         $response = $this->deleteJson(route('v1.orders.destroy', ['id' => $order->id]));
@@ -50,6 +51,19 @@ class DeleteOrderControllerTest extends TestCase
         $response->assertStatus(Response::HTTP_NO_CONTENT);
         $this->assertDatabaseMissing('orders', ['id' => $order->id]);
         $this->assertDatabaseMissing('order_items', ['order_id' => $order->id]);
+
+        $this->assertDatabaseHas('products', [
+            'id' => $product->id,
+            'quantity' => 10,
+        ]);
+
+        $this->assertDatabaseHas('inventory_history', [
+            'product_id' => $product->id,
+            'change_type' => 'return',
+            'quantity_changed' => 3,
+            'previous_quantity' => 7,
+            'new_quantity' => 10,
+        ]);
     }
 
     public function test_delete_nonexistent_order_returns_422(): void

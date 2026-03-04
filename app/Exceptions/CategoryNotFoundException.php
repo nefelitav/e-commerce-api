@@ -5,7 +5,7 @@ namespace App\Exceptions;
 use Exception;
 use Symfony\Component\HttpFoundation\Response;
 
-class CategoryNotFoundException extends Exception
+final class CategoryNotFoundException extends Exception
 {
     public function __construct(int $id)
     {

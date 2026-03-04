@@ -6,12 +6,11 @@ use App\Dto\Category\Category;
 use App\Dto\Category\UnpersistedCategory;
 use App\Exceptions\CategoryNotFoundException;
 use App\Models\Category\CategoryModel;
-use Illuminate\Support\Collection;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Pagination\LengthAwarePaginator;
-use Illuminate\Support\Collection as LaravelCollection;
 use Illuminate\Support\Facades\Cache;
 
-class CategoryRepository
+class CategoryRepository implements CategoryRepositoryInterface
 {
     private const TTL = 1800;
 
@@ -49,12 +48,15 @@ class CategoryRepository
 
             $paginator = $query->paginate($perPage, ['*'], 'page', $page);
 
-            /** @var LaravelCollection<int, Category> $items */
-            $items = $paginator->getCollection()->map(fn($model) => Category::fromModel($model));
+            $items = $paginator->getCollection()->map(fn(CategoryModel $model) => Category::fromModel($model));
 
-            $paginator->setCollection($items);
-
-            return $paginator;
+            return new LengthAwarePaginator(
+                $items,
+                $paginator->total(),
+                $paginator->perPage(),
+                $paginator->currentPage(),
+                ['path' => LengthAwarePaginator::resolveCurrentPath()],
+            );
         });
 
         return $result;

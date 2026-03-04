@@ -13,12 +13,12 @@ use App\Models\InventoryHistory\InventoryHistoryModel;
 use App\Models\Order\OrderModel;
 use App\Models\Product\ProductModel;
 use App\Models\UserModel;
-use App\Repositories\InventoryHistory\InventoryHistoryRepository;
-use App\Repositories\Order\OrderRepository;
-use App\Repositories\Product\ProductRepository;
+use App\Repositories\InventoryHistory\InventoryHistoryRepositoryInterface;
+use App\Repositories\Order\OrderRepositoryInterface;
+use App\Repositories\Product\ProductRepositoryInterface;
 use App\Services\AuditLogger;
 use App\Services\Order\OrderService;
-use App\Services\Order\OrderStatusMachine;
+use App\Services\Order\OrderStatusMachineInterface;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use PHPUnit\Framework\MockObject\MockObject;
@@ -28,14 +28,14 @@ class OrderServiceCacheInvalidationTest extends TestCase
 {
     use RefreshDatabase;
 
-    /** @var OrderRepository&MockObject */
-    private OrderRepository $repository;
-    /** @var ProductRepository&MockObject */
-    private ProductRepository $productRepository;
-    /** @var InventoryHistoryRepository&MockObject */
-    private InventoryHistoryRepository $inventoryHistoryRepository;
-    /** @var OrderStatusMachine&MockObject */
-    private OrderStatusMachine $statusMachine;
+    /** @var OrderRepositoryInterface&MockObject */
+    private OrderRepositoryInterface $repository;
+    /** @var ProductRepositoryInterface&MockObject */
+    private ProductRepositoryInterface $productRepository;
+    /** @var InventoryHistoryRepositoryInterface&MockObject */
+    private InventoryHistoryRepositoryInterface $inventoryHistoryRepository;
+    /** @var OrderStatusMachineInterface&MockObject */
+    private OrderStatusMachineInterface $statusMachine;
     private OrderService $service;
 
     protected function setUp(): void
@@ -43,10 +43,10 @@ class OrderServiceCacheInvalidationTest extends TestCase
         parent::setUp();
 
         Cache::tags(['products'])->flush();
-        $this->repository = $this->createMock(OrderRepository::class);
-        $this->productRepository = $this->createMock(ProductRepository::class);
-        $this->inventoryHistoryRepository = $this->createMock(InventoryHistoryRepository::class);
-        $this->statusMachine = $this->createMock(OrderStatusMachine::class);
+        $this->repository = $this->createMock(OrderRepositoryInterface::class);
+        $this->productRepository = $this->createMock(ProductRepositoryInterface::class);
+        $this->inventoryHistoryRepository = $this->createMock(InventoryHistoryRepositoryInterface::class);
+        $this->statusMachine = $this->createMock(OrderStatusMachineInterface::class);
         $this->service = new OrderService(
             $this->repository,
             $this->productRepository,

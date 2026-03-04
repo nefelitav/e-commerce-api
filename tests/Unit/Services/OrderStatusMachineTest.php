@@ -89,11 +89,11 @@ class OrderStatusMachineTest extends TestCase
     // Admin transitions
     // -----------------------------------------------------------------------
 
-    public function test_admin_pending_to_paid_throws(): void
+    public function test_admin_pending_to_paid_is_allowed(): void
     {
         $order = Order::fromModel(OrderModel::factory()->create(['status' => OrderStatus::Pending->value]));
 
-        $this->expectException(InvalidOrderStateException::class);
+        $this->expectNotToPerformAssertions();
         $this->machine->assertAdminTransitionAllowed($order, OrderStatus::Paid);
     }
 

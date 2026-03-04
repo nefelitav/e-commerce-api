@@ -4,12 +4,13 @@ namespace App\Services\Product;
 
 use App\Dto\Product\Product;
 use App\Dto\Product\UnpersistedProduct;
+use App\Enums\InventoryChangeType;
 use App\Exceptions\InsufficientStockException;
 use App\Exceptions\ProductAlreadyExistsException;
 use App\Exceptions\ProductNotFoundException;
-use App\Repositories\InventoryHistory\InventoryHistoryRepository;
+use App\Repositories\InventoryHistory\InventoryHistoryRepositoryInterface;
 use App\Dto\InventoryHistory\UnpersistedInventoryHistoryEntry;
-use App\Repositories\Product\ProductRepository;
+use App\Repositories\Product\ProductRepositoryInterface;
 use App\Services\AuditLogger;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Cache;
@@ -18,8 +19,8 @@ use Illuminate\Support\Facades\DB;
 final readonly class ProductService implements ProductServiceInterface
 {
     public function __construct(
-        private ProductRepository $repository,
-        private InventoryHistoryRepository $inventoryHistoryRepository,
+        private ProductRepositoryInterface $repository,
+        private InventoryHistoryRepositoryInterface $inventoryHistoryRepository,
         private AuditLogger $auditLogger,
     ) {
     }
@@ -71,7 +72,7 @@ final readonly class ProductService implements ProductServiceInterface
 
                 $this->inventoryHistoryRepository->record(new UnpersistedInventoryHistoryEntry(
                     productId: $created->id,
-                    changeType: 'addition',
+                    changeType: InventoryChangeType::Addition,
                     quantityChanged: $created->quantity,
                     previousQuantity: 0,
                     newQuantity: $created->quantity,
@@ -121,7 +122,7 @@ final readonly class ProductService implements ProductServiceInterface
                 if ($newQuantity !== $previousQuantity) {
                     $this->inventoryHistoryRepository->record(new UnpersistedInventoryHistoryEntry(
                         productId: $updated->id,
-                        changeType: 'adjustment',
+                        changeType: InventoryChangeType::Adjustment,
                         quantityChanged: $newQuantity - $previousQuantity,
                         previousQuantity: $previousQuantity,
                         newQuantity: $newQuantity,

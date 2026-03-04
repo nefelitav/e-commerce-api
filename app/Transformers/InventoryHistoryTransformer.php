@@ -14,7 +14,7 @@ final readonly class InventoryHistoryTransformer
         return [
             'id' => $entry->id,
             'product_id' => $entry->productId,
-            'change_type' => $entry->changeType,
+            'change_type' => $entry->changeType->value,
             'quantity_changed' => $entry->quantityChanged,
             'previous_quantity' => $entry->previousQuantity,
             'new_quantity' => $entry->newQuantity,

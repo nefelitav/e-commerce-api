@@ -5,7 +5,7 @@ namespace App\Exceptions;
 use Exception;
 use Symfony\Component\HttpFoundation\Response;
 
-class ProductAlreadyExistsException extends Exception
+final class ProductAlreadyExistsException extends Exception
 {
     public function __construct(string $name)
     {

@@ -18,6 +18,27 @@ class Handler extends ExceptionHandler
             ], Response::HTTP_BAD_REQUEST);
         }
 
+        if ($e instanceof ProductNotFoundException
+            || $e instanceof OrderNotFoundException
+            || $e instanceof CategoryNotFoundException
+        ) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+                'error' => 'Not Found',
+            ], Response::HTTP_NOT_FOUND);
+        }
+
+        if ($e instanceof ProductAlreadyExistsException
+            || $e instanceof CategoryAlreadyExistsException
+        ) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+                'error' => 'Conflict',
+            ], Response::HTTP_CONFLICT);
+        }
+
         if ($e instanceof UnprocessableEntityException) {
             return response()->json([
                 'success' => false,

@@ -5,7 +5,7 @@ namespace App\Exceptions;
 use Exception;
 use Symfony\Component\HttpFoundation\Response;
 
-class ProductNotFoundException extends Exception
+final class ProductNotFoundException extends Exception
 {
     public function __construct(int $id)
     {

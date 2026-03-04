@@ -5,6 +5,7 @@ namespace App\Services\Order;
 use App\Dto\InventoryHistory\UnpersistedInventoryHistoryEntry;
 use App\Dto\Order\Order;
 use App\Dto\Order\UnpersistedOrder;
+use App\Enums\InventoryChangeType;
 use App\Enums\OrderStatus;
 use App\Events\OrderCreatedEvent;
 use App\Events\OrderPaidEvent;
@@ -13,9 +14,9 @@ use App\Exceptions\InsufficientStockException;
 use App\Exceptions\InvalidOrderStateException;
 use App\Exceptions\OrderNotFoundException;
 use App\Exceptions\ProductNotFoundException;
-use App\Repositories\InventoryHistory\InventoryHistoryRepository;
-use App\Repositories\Order\OrderRepository;
-use App\Repositories\Product\ProductRepository;
+use App\Repositories\InventoryHistory\InventoryHistoryRepositoryInterface;
+use App\Repositories\Order\OrderRepositoryInterface;
+use App\Repositories\Product\ProductRepositoryInterface;
 use App\Services\AuditLogger;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Cache;
@@ -24,10 +25,10 @@ use Illuminate\Support\Facades\DB;
 final readonly class OrderService implements OrderServiceInterface
 {
     public function __construct(
-        private OrderRepository $repository,
-        private ProductRepository $productRepository,
-        private InventoryHistoryRepository $inventoryHistoryRepository,
-        private OrderStatusMachine $statusMachine,
+        private OrderRepositoryInterface $repository,
+        private ProductRepositoryInterface $productRepository,
+        private InventoryHistoryRepositoryInterface $inventoryHistoryRepository,
+        private OrderStatusMachineInterface $statusMachine,
         private AuditLogger $auditLogger,
     ) {
     }
@@ -85,7 +86,7 @@ final readonly class OrderService implements OrderServiceInterface
 
                     $this->inventoryHistoryRepository->record(new UnpersistedInventoryHistoryEntry(
                         productId: $item->productId,
-                        changeType: 'sale',
+                        changeType: InventoryChangeType::Sale,
                         quantityChanged: -$item->quantity,
                         previousQuantity: $previousQuantity,
                         newQuantity: $newQuantity,
@@ -189,10 +190,44 @@ final readonly class OrderService implements OrderServiceInterface
      */
     public function deleteOrder(int $id): bool
     {
-        $result = $this->repository->delete($id);
+        $order = $this->repository->findById($id);
 
-        $this->auditLogger->log('order.deleted', 'order', $id);
+        if ($order === null) {
+            throw new OrderNotFoundException($id);
+        }
 
-        return $result;
+        DB::transaction(function () use ($order, $id) {
+            foreach ($order->items as $item) {
+                $productModel = $this->productRepository->findByIdForUpdate($item->productId);
+
+                if ($productModel !== null) {
+                    $previousQuantity = $productModel->quantity;
+                    $newQuantity = $previousQuantity + $item->quantity;
+
+                    $productModel->update(['quantity' => $newQuantity]);
+
+                    $this->inventoryHistoryRepository->record(new UnpersistedInventoryHistoryEntry(
+                        productId: $item->productId,
+                        changeType: InventoryChangeType::Return,
+                        quantityChanged: $item->quantity,
+                        previousQuantity: $previousQuantity,
+                        newQuantity: $newQuantity,
+                    ));
+                }
+            }
+
+            $this->repository->delete($id);
+        });
+
+        foreach ($order->items as $item) {
+            Cache::forget("products.{$item->productId}");
+        }
+        Cache::tags(['products'])->flush();
+
+        $this->auditLogger->log('order.deleted', 'order', $id, [
+            'restored_items' => count($order->items),
+        ]);
+
+        return true;
     }
 }

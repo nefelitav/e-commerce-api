@@ -44,7 +44,7 @@ final readonly class ListCategoryProductsController extends Controller
         }
 
         $productsArray = [];
-        foreach ($products as $product) {
+        foreach ($products ?? [] as $product) {
             $productsArray[] = $this->transformer->transform($product);
 
         }

@@ -19,6 +19,7 @@ use Illuminate\Database\Eloquent\Collection;
  * @property int|null $parent_id
  * @property CategoryModel $parent
  * @method static static create(array<mixed> $attributes = [])
+ * @method static static|null find(int|string $id, array<int, string> $columns = ['*'])
  * @property Collection<int, ProductModel> $products
  * @property Collection<int, CategoryModel> $children
  */
@@ -59,31 +60,5 @@ class CategoryModel extends Model
     public function products(): HasMany
     {
         return $this->hasMany(ProductModel::class, 'category_id');
-    }
-
-
-    public function getId(): int
-    {
-        return $this->id;
-    }
-
-    public function getName(): string
-    {
-        return $this->name;
-    }
-
-    public function getDescription(): ?string
-    {
-        return $this->description;
-    }
-
-    public function getParentId(): ?int
-    {
-        return $this->parent_id;
-    }
-
-    public function getParent(): ?CategoryModel
-    {
-        return $this->parent;
     }
 }

@@ -9,7 +9,11 @@ use Illuminate\Notifications\Notifiable;
 
 /**
  * @property int $id
+ * @property string $name
+ * @property string $email
  * @property string $role
+ * @method static static create(array<string, mixed> $attributes = [])
+ * @method static static|null find(int|string $id, array<int, string> $columns = ['*'])
  */
 class UserModel extends Authenticatable
 {

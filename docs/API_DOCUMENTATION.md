@@ -961,9 +961,16 @@ curl -i http://localhost:8000/api/v1/products
 POST /api/v1/webhooks/payments
 ```
 
-**Auth:** None (called by external payment provider)
+**Auth:** HMAC-SHA256 signature verification (when `WEBHOOK_SIGNING_SECRET` is configured)
 
 **Description:** Receives a payment confirmation from an external payment provider. Transitions the order from `pending` to `paid` and dispatches an `OrderPaidEvent` which triggers outbound webhooks.
+
+When a signing secret is configured, the payment provider must include an `X-Webhook-Signature` header containing the HMAC-SHA256 hash of the raw request body, signed with the shared secret. Requests with missing or invalid signatures are rejected with `403 Forbidden`.
+
+**Headers:**
+| Header | Required | Description |
+|--------|----------|-------------|
+| `X-Webhook-Signature` | When `WEBHOOK_SIGNING_SECRET` is set | HMAC-SHA256 of request body |
 
 **Request Body:**
 ```json
@@ -996,6 +1003,7 @@ POST /api/v1/webhooks/payments
 
 **Error Responses:**
 - `400 Bad Request` — Order is not in `pending` status or not found
+- `403 Forbidden` — Invalid or missing webhook signature (when signing secret is configured)
 - `422 Unprocessable Entity` — Validation error (missing fields, invalid status, nonexistent order)
 
 ---

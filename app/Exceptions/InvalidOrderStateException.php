@@ -5,7 +5,7 @@ namespace App\Exceptions;
 use Exception;
 use Symfony\Component\HttpFoundation\Response;
 
-class InvalidOrderStateException extends Exception
+final class InvalidOrderStateException extends Exception
 {
     public function __construct(string $reason)
     {

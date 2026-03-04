@@ -7,7 +7,7 @@ use App\Enums\OrderStatus;
 use App\Exceptions\InvalidOrderStateException;
 use Carbon\Carbon;
 
-class OrderStatusMachine
+final readonly class OrderStatusMachine implements OrderStatusMachineInterface
 {
     private const CANCELLATION_WINDOW_HOURS = 24;
 
@@ -22,7 +22,7 @@ class OrderStatusMachine
      * @var array<string, list<OrderStatus>>
      */
     private const ADMIN_ALLOWED_TRANSITIONS = [
-        OrderStatus::Pending->value   => [OrderStatus::Cancelled],
+        OrderStatus::Pending->value   => [OrderStatus::Paid, OrderStatus::Cancelled],
         OrderStatus::Paid->value      => [OrderStatus::Shipped, OrderStatus::Refunded],
         OrderStatus::Shipped->value   => [OrderStatus::Delivered],
         OrderStatus::Delivered->value => [OrderStatus::Refunded],

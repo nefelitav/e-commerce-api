@@ -47,39 +47,4 @@ class ProductModel extends Model
     {
         return $this->belongsTo(CategoryModel::class, 'category_id');
     }
-
-    public function getId(): int
-    {
-        return $this->id;
-    }
-
-    public function getName(): string
-    {
-        return $this->name;
-    }
-
-    public function getDescription(): ?string
-    {
-        return $this->description;
-    }
-
-    public function getCategoryId(): int
-    {
-        return $this->category_id;
-    }
-
-    public function getPrice(): float
-    {
-        return $this->price;
-    }
-
-    public function getQuantity(): int
-    {
-        return $this->quantity;
-    }
-
-    public function getCategory(): ?CategoryModel
-    {
-        return $this->category;
-    }
 }

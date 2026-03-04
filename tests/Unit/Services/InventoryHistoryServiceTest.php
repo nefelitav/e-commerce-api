@@ -4,7 +4,7 @@ namespace Tests\Unit\Services;
 
 use App\Dto\InventoryHistory\InventoryHistoryEntry;
 use App\Models\InventoryHistory\InventoryHistoryModel;
-use App\Repositories\InventoryHistory\InventoryHistoryRepository;
+use App\Repositories\InventoryHistory\InventoryHistoryRepositoryInterface;
 use App\Services\InventoryHistory\InventoryHistoryService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -13,14 +13,14 @@ class InventoryHistoryServiceTest extends TestCase
 {
     use RefreshDatabase;
 
-    /** @var InventoryHistoryRepository&\PHPUnit\Framework\MockObject\MockObject $repository */
-    private InventoryHistoryRepository $repository;
+    /** @var InventoryHistoryRepositoryInterface&\PHPUnit\Framework\MockObject\MockObject $repository */
+    private InventoryHistoryRepositoryInterface $repository;
     private InventoryHistoryService $service;
 
     protected function setUp(): void
     {
         parent::setUp();
-        $this->repository = $this->createMock(InventoryHistoryRepository::class);
+        $this->repository = $this->createMock(InventoryHistoryRepositoryInterface::class);
         $this->service = new InventoryHistoryService($this->repository);
     }
 

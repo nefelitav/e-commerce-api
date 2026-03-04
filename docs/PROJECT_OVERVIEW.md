@@ -225,6 +225,7 @@ app/
 │   ├── Order/
 │   └── Product/
 ├── Enums/                        # Enumerations
+│   ├── InventoryChangeType.php
 │   └── OrderStatus.php
 ├── Events/                       # Domain Events
 │   ├── OrderCreatedEvent.php
@@ -273,12 +274,12 @@ app/
 │   ├── InventoryHistory/
 │   ├── Order/
 │   └── Product/
-├── Repositories/                 # Data Access Layer
+├── Repositories/                 # Data Access Layer (interface + implementation per domain)
 │   ├── Category/
 │   ├── InventoryHistory/
 │   ├── Order/
 │   └── Product/
-├── Services/                     # Business Logic Layer
+├── Services/                     # Business Logic Layer (interface + implementation per domain)
 │   ├── AuditLogger.php
 │   ├── Category/
 │   ├── InventoryHistory/

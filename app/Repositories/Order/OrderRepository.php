@@ -7,12 +7,10 @@ use App\Dto\Order\UnpersistedOrder;
 use App\Exceptions\OrderNotFoundException;
 use App\Models\Order\OrderItemModel;
 use App\Models\Order\OrderModel;
-use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Pagination\LengthAwarePaginator;
-use Illuminate\Support\Collection as LaravelCollection;
 use Illuminate\Support\Facades\DB;
 
-class OrderRepository
+class OrderRepository implements OrderRepositoryInterface
 {
     /**
      * @param array<string, mixed> $filters
@@ -60,12 +58,15 @@ class OrderRepository
 
         $paginator = $query->paginate($perPage, ['*'], 'page', $page);
 
-        /** @var LaravelCollection<int, Order> $items */
-        $items = $paginator->getCollection()->map(fn($model) => Order::fromModel($model));
+        $items = $paginator->getCollection()->map(fn(OrderModel $model) => Order::fromModel($model));
 
-        $paginator->setCollection($items);
-
-        return $paginator;
+        return new LengthAwarePaginator(
+            $items,
+            $paginator->total(),
+            $paginator->perPage(),
+            $paginator->currentPage(),
+            ['path' => LengthAwarePaginator::resolveCurrentPath()],
+        );
     }
 
     public function findById(int $id): ?Order

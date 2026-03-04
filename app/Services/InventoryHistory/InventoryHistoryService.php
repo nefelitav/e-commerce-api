@@ -3,12 +3,12 @@
 namespace App\Services\InventoryHistory;
 
 use App\Dto\InventoryHistory\InventoryHistoryEntry;
-use App\Repositories\InventoryHistory\InventoryHistoryRepository;
+use App\Repositories\InventoryHistory\InventoryHistoryRepositoryInterface;
 
 final readonly class InventoryHistoryService
 {
     public function __construct(
-        private InventoryHistoryRepository $repository,
+        private InventoryHistoryRepositoryInterface $repository,
     ) {
     }
 

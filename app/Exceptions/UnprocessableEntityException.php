@@ -9,10 +9,15 @@ use Throwable;
 class UnprocessableEntityException extends HttpException
 {
     public function __construct(
-        string $message = 'Unprocessable Entity',
+        string|Throwable $message = 'Unprocessable Entity',
         ?Throwable $previous = null,
     )
     {
+        if ($message instanceof Throwable) {
+            $previous = $message;
+            $message = $message->getMessage();
+        }
+
         parent::__construct(
             Response::HTTP_UNPROCESSABLE_ENTITY,
             $message,

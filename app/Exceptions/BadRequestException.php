@@ -9,9 +9,14 @@ use Throwable;
 final class BadRequestException extends HttpException
 {
     public function __construct(
-        string $message = 'Bad Request',
+        string|Throwable $message = 'Bad Request',
         ?Throwable $previous = null,
     ) {
+        if ($message instanceof Throwable) {
+            $previous = $message;
+            $message = $message->getMessage();
+        }
+
         parent::__construct(
             Response::HTTP_BAD_REQUEST,
             $message,

@@ -6,9 +6,25 @@ use Illuminate\Foundation\Http\FormRequest;
 
 final class PaymentWebhookRequest extends FormRequest
 {
-    public function authorize(): true
+    public function authorize(): bool
     {
-        return true;
+        /** @var string|null $secret */
+        $secret = config('webhooks.signing_secret');
+
+        if ($secret === null || $secret === '') {
+            return true;
+        }
+
+        /** @var string|null $signature */
+        $signature = $this->header('X-Webhook-Signature');
+
+        if ($signature === null) {
+            return false;
+        }
+
+        $expectedSignature = hash_hmac('sha256', (string) $this->getContent(), $secret);
+
+        return hash_equals($expectedSignature, $signature);
     }
 
     /**

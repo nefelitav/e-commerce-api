@@ -23,6 +23,7 @@ use Illuminate\Support\Carbon;
  * @property UserModel $user
  * @property Collection<int, OrderItemModel> $items
  * @method static static create(array<mixed> $attributes = [])
+ * @method static static|null find(int|string $id, array<int, string> $columns = ['*'])
  */
 class OrderModel extends Model
 {

@@ -5,7 +5,7 @@ namespace App\Exceptions;
 use Exception;
 use Symfony\Component\HttpFoundation\Response;
 
-class OrderNotFoundException extends Exception
+final class OrderNotFoundException extends Exception
 {
     public function __construct(int $id)
     {

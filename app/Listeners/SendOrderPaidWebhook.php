@@ -4,6 +4,7 @@ namespace App\Listeners;
 
 use App\Events\OrderPaidEvent;
 use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -26,6 +27,7 @@ final class SendOrderPaidWebhook implements ShouldQueue
 
         $payload = $event->toPayload();
 
+        /** @var Response $response */
         $response = Http::timeout(10)->post($url, $payload);
 
         if ($response->failed()) {

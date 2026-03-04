@@ -6,13 +6,14 @@ use App\Dto\InventoryHistory\InventoryHistoryEntry;
 use App\Dto\InventoryHistory\UnpersistedInventoryHistoryEntry;
 use App\Dto\Product\Product;
 use App\Dto\Product\UnpersistedProduct;
+use App\Enums\InventoryChangeType;
 use App\Exceptions\InsufficientStockException;
 use App\Exceptions\ProductAlreadyExistsException;
 use App\Exceptions\ProductNotFoundException;
 use App\Models\InventoryHistory\InventoryHistoryModel;
 use App\Models\Product\ProductModel;
-use App\Repositories\InventoryHistory\InventoryHistoryRepository;
-use App\Repositories\Product\ProductRepository;
+use App\Repositories\InventoryHistory\InventoryHistoryRepositoryInterface;
+use App\Repositories\Product\ProductRepositoryInterface;
 use App\Services\AuditLogger;
 use App\Services\Product\ProductService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -24,18 +25,18 @@ class ProductServiceTest extends TestCase
 {
     use RefreshDatabase;
 
-    /** @var ProductRepository&MockObject */
-    private ProductRepository $repository;
-    /** @var InventoryHistoryRepository&MockObject */
-    private InventoryHistoryRepository $inventoryHistoryRepository;
+    /** @var ProductRepositoryInterface&MockObject */
+    private ProductRepositoryInterface $repository;
+    /** @var InventoryHistoryRepositoryInterface&MockObject */
+    private InventoryHistoryRepositoryInterface $inventoryHistoryRepository;
     private ProductService $service;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->repository = $this->createMock(ProductRepository::class);
-        $this->inventoryHistoryRepository = $this->createMock(InventoryHistoryRepository::class);
+        $this->repository = $this->createMock(ProductRepositoryInterface::class);
+        $this->inventoryHistoryRepository = $this->createMock(InventoryHistoryRepositoryInterface::class);
         $this->service = new ProductService($this->repository, $this->inventoryHistoryRepository, new AuditLogger());
     }
 
@@ -222,7 +223,7 @@ class ProductServiceTest extends TestCase
             ->expects($this->once())
             ->method('record')
             ->with($this->callback(function (UnpersistedInventoryHistoryEntry $entry) {
-                return $entry->changeType === 'adjustment'
+                return $entry->changeType === InventoryChangeType::Adjustment
                     && $entry->previousQuantity === 10
                     && $entry->newQuantity === 20
                     && $entry->quantityChanged === 10;
