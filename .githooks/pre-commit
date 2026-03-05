@@ -1,0 +1,98 @@
+#!/bin/sh
+
+# =============================================================================
+# Pre-commit Git Hook for shop-api
+# =============================================================================
+# This hook runs automatically before each commit and performs:
+#   1. Code style fixes + unused import removal via Laravel Pint (on staged files)
+#   2. Static analysis via PHPStan (on staged files)
+#
+# Staged files are automatically re-staged after Pint fixes them.
+# If PHPStan finds errors, the commit is aborted.
+#
+# Installation:
+#   cp .githooks/pre-commit .git/hooks/pre-commit
+#   chmod +x .git/hooks/pre-commit
+#
+# Or use:
+#   composer run setup-hooks
+# =============================================================================
+
+set -e
+
+STAGED_PHP_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep '\.php$' || true)
+
+if [ -z "$STAGED_PHP_FILES" ]; then
+    echo "✅ No staged PHP files — skipping checks."
+    exit 0
+fi
+
+echo "🔍 Pre-commit hook: checking $(echo "$STAGED_PHP_FILES" | wc -l | tr -d ' ') PHP file(s)..."
+echo ""
+
+# -----------------------------------------------------------------------------
+# Step 1: Run Laravel Pint (code style fixes + unused import removal)
+# -----------------------------------------------------------------------------
+echo "🎨 Running Laravel Pint (code style & unused imports)..."
+
+PINT_EXIT=0
+for FILE in $STAGED_PHP_FILES; do
+    if [ -f "$FILE" ]; then
+        ./vendor/bin/pint "$FILE" --quiet 2>/dev/null || PINT_EXIT=$?
+    fi
+done
+
+if [ $PINT_EXIT -ne 0 ]; then
+    echo "⚠️  Pint encountered issues but continued."
+fi
+
+# Re-stage any files that Pint modified
+MODIFIED_FILES=""
+for FILE in $STAGED_PHP_FILES; do
+    if [ -f "$FILE" ]; then
+        if ! git diff --quiet "$FILE" 2>/dev/null; then
+            MODIFIED_FILES="$MODIFIED_FILES $FILE"
+        fi
+    fi
+done
+
+if [ -n "$MODIFIED_FILES" ]; then
+    echo "📝 Re-staging files modified by Pint:"
+    for FILE in $MODIFIED_FILES; do
+        echo "   • $FILE"
+        git add "$FILE"
+    done
+    echo ""
+else
+    echo "✅ No code style changes needed."
+    echo ""
+fi
+
+# -----------------------------------------------------------------------------
+# Step 2: Run PHPStan (static analysis)
+# -----------------------------------------------------------------------------
+echo "🔬 Running PHPStan (static analysis)..."
+
+# Build the file list for PHPStan — only analyse staged files that exist
+PHPSTAN_FILES=""
+for FILE in $STAGED_PHP_FILES; do
+    if [ -f "$FILE" ]; then
+        PHPSTAN_FILES="$PHPSTAN_FILES $FILE"
+    fi
+done
+
+if [ -z "$PHPSTAN_FILES" ]; then
+    echo "✅ No PHP files to analyse."
+    exit 0
+fi
+
+if ! ./vendor/bin/phpstan analyse --no-progress --memory-limit=512M $PHPSTAN_FILES; then
+    echo ""
+    echo "❌ PHPStan found errors. Please fix them before committing."
+    exit 1
+fi
+
+echo ""
+echo "✅ All checks passed. Proceeding with commit."
+exit 0
+

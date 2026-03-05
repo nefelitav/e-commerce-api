@@ -48,6 +48,8 @@ cd shop-api
 composer install
 ```
 
+> **Note:** This also installs git hooks automatically (pre-commit hook for code style and static analysis).
+
 ### 3. Copy Environment Configuration
 ```bash
 cp .env.example .env
@@ -417,26 +419,53 @@ php artisan view:clear
 
 ## Code Standards
 
-### PHP Code Style
+### Git Hooks (Pre-commit)
 
-**Run PHP CS Fixer**
+The project uses a **pre-commit git hook** that runs automatically before each commit:
+
+1. **Laravel Pint** — fixes code style and removes unused imports on staged PHP files
+2. **PHPStan** — runs static analysis on staged PHP files
+
+Fixed files are automatically re-staged. If PHPStan finds errors, the commit is aborted.
+
+**Install hooks** (automatically done on `composer install`):
+```bash
+composer run setup-hooks
+```
+
+### PHP Code Style (Laravel Pint)
+
+Pint is configured via `pint.json` with the `laravel` preset plus additional rules for unused import removal, import ordering, and trailing commas.
+
+```bash
+# Fix all code style issues
+composer run fix
+
+# Check code style without fixing (dry-run)
+composer run lint
+```
+
+### Static Analysis (PHPStan)
+
+PHPStan is configured via `phpstan.neon` at level 7 with Larastan extensions.
+
+```bash
+# Run PHPStan analysis
+composer run analyse
+```
+
+### Run All Checks
+
+```bash
+# Run Pint (dry-run) + PHPStan together
+composer run check
+```
+
+### PHP CS Fixer (Legacy)
+
+PHP CS Fixer is also available if needed:
 ```bash
 ./vendor/bin/php-cs-fixer fix app
-```
-
-**Check PHP Stan (Static Analysis)**
-```bash
-./vendor/bin/phpstan analyse app
-```
-
-### Code Formatting
-
-**Format with Pint**
-```bash
-php artisan pint
-
-# Check without fixing
-php artisan pint --test
 ```
 
 ### Laravel IDE Helper
