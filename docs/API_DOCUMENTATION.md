@@ -101,11 +101,10 @@ Accept: application/json
   "data": {
     "id": 1,
     "name": "Product Name",
-    "description": "Product description",
     "price": 99.99,
     "quantity": 10,
-    "created_at": "2024-01-15T10:30:00Z",
-    "updated_at": "2024-01-15T10:30:00Z"
+    "description": "Product description",
+    "category_id": 1
   },
   "message": "Resource found"
 }
@@ -119,12 +118,18 @@ Accept: application/json
     {
       "id": 1,
       "name": "Product 1",
-      "price": 99.99
+      "price": 99.99,
+      "quantity": 5,
+      "description": "High-performance product",
+      "category_id": 1
     },
     {
       "id": 2,
       "name": "Product 2",
-      "price": 49.99
+      "price": 49.99,
+      "quantity": 10,
+      "description": "Affordable product",
+      "category_id": 2
     }
   ],
   "meta": {
@@ -218,12 +223,10 @@ GET /api/v1/products?filter[category_id]=1&filter[min_price]=100&sort=price&orde
     {
       "id": 1,
       "name": "Gaming Laptop",
-      "description": "High-performance laptop",
       "price": 1299.99,
       "quantity": 5,
-      "category_id": 1,
-      "created_at": "2024-01-15T10:30:00Z",
-      "updated_at": "2024-01-15T10:30:00Z"
+      "description": "High-performance laptop",
+      "category_id": 1
     }
   ],
   "meta": {
@@ -257,12 +260,10 @@ GET /api/v1/products/1
   "data": {
     "id": 1,
     "name": "Gaming Laptop",
-    "description": "High-performance laptop",
     "price": 1299.99,
     "quantity": 5,
-    "category_id": 1,
-    "created_at": "2024-01-15T10:30:00Z",
-    "updated_at": "2024-01-15T10:30:00Z"
+    "description": "High-performance laptop",
+    "category_id": 1
   },
   "message": "Product found"
 }
@@ -297,11 +298,11 @@ POST /api/v1/products
 ```
 
 **Validation Rules:**
-- `name` - Required, string, unique
-- `description` - Required, string
-- `price` - Required, numeric, min: 0
+- `name` - Required, string, max: 255
+- `description` - Optional, string, max: 5000 (nullable)
+- `price` - Required, numeric, min: 0.01
 - `quantity` - Required, integer, min: 0
-- `category_id` - Required, integer, exists in categories table
+- `category_id` - Optional, integer, exists in categories table (nullable)
 
 **Example Response:**
 ```json
@@ -310,12 +311,10 @@ POST /api/v1/products
   "data": {
     "id": 100,
     "name": "New Product",
-    "description": "Product description",
     "price": 99.99,
     "quantity": 10,
-    "category_id": 1,
-    "created_at": "2024-01-20T15:00:00Z",
-    "updated_at": "2024-01-20T15:00:00Z"
+    "description": "Product description",
+    "category_id": 1
   },
   "message": "Product created successfully"
 }
@@ -348,12 +347,10 @@ PUT /api/v1/products/{id}
   "data": {
     "id": 1,
     "name": "Updated Product Name",
-    "description": "Updated description",
     "price": 149.99,
     "quantity": 15,
-    "category_id": 2,
-    "created_at": "2024-01-15T10:30:00Z",
-    "updated_at": "2024-01-20T15:00:00Z"
+    "description": "Updated description",
+    "category_id": 2
   },
   "message": "Product updated successfully"
 }
@@ -368,15 +365,7 @@ PUT /api/v1/products/{id}
 DELETE /api/v1/products/{id}
 ```
 
-**Example Response:**
-```json
-{
-  "success": true,
-  "message": "Product deleted successfully"
-}
-```
-
-**Status Code:** `200 OK`
+**Status Code:** `204 No Content`
 
 ---
 
@@ -411,16 +400,16 @@ GET /api/v1/categories?filter[parent_id]=null&include=children&sort=name
     {
       "id": 1,
       "name": "Electronics",
+      "description": "Electronic devices and accessories",
       "parent_id": null,
       "children": [
         {
           "id": 2,
           "name": "Computers",
+          "description": "Desktop and laptop computers",
           "parent_id": 1
         }
-      ],
-      "created_at": "2024-01-01T00:00:00Z",
-      "updated_at": "2024-01-01T00:00:00Z"
+      ]
     }
   ],
   "meta": {
@@ -455,13 +444,15 @@ POST /api/v1/categories
 ```json
 {
   "name": "New Category",
+  "description": "Category description",
   "parent_id": null
 }
 ```
 
 **Validation Rules:**
-- `name` - Required, string, unique
-- `parent_id` - Optional, integer, exists in categories table
+- `name` - Required, string, max: 255
+- `description` - Optional, string, max: 5000 (nullable)
+- `parent_id` - Optional, integer, exists in categories table (nullable)
 
 **Status Code:** `201 Created`
 
@@ -476,6 +467,7 @@ PUT /api/v1/categories/{id}
 ```json
 {
   "name": "Updated Category",
+  "description": "Updated description",
   "parent_id": 1
 }
 ```
@@ -489,7 +481,7 @@ PUT /api/v1/categories/{id}
 DELETE /api/v1/categories/{id}
 ```
 
-**Status Code:** `200 OK`
+**Status Code:** `204 No Content`
 
 ---
 
@@ -506,9 +498,8 @@ GET /api/v1/categories/{id}/subcategories
     {
       "id": 2,
       "name": "Computers",
-      "parent_id": 1,
-      "created_at": "2024-01-01T00:00:00Z",
-      "updated_at": "2024-01-01T00:00:00Z"
+      "description": "Desktop and laptop computers",
+      "parent_id": 1
     }
   ],
   "message": "Subcategories found"
@@ -707,7 +698,7 @@ DELETE /api/v1/orders/{id}
 |------|---------|---------|
 | 200 | OK | Successfully retrieved/updated resource |
 | 201 | Created | Resource created successfully |
-| 204 | No Content | Resource deleted successfully |
+| 204 | No Content | Resource deleted successfully (products, categories, orders) |
 | 400 | Bad Request | Business rule violation (e.g. insufficient stock, invalid order transition) |
 | 401 | Unauthorized | Request is not authenticated |
 | 403 | Forbidden | Authenticated but insufficient role |

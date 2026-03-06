@@ -73,7 +73,7 @@ The Shop API follows a **layered hexagonal architecture** with clear separation 
                   │
 ┌─────────────────▼───────────────────────────────┐
 │            Database                             │
-│         (SQLite)                                │
+│   (SQLite local / PostgreSQL via Docker)        │
 └─────────────────────────────────────────────────┘
                   │
 ┌─────────────────▼───────────────────────────────┐
@@ -257,14 +257,12 @@ class ProductService
 final readonly class Product
 {
     public function __construct(
-        public int $id,
-        public string $name,
-        public string $description,
+        public int    $id,
+        public string  $name,
+        public ?string $description,
         public float $price,
         public int $quantity,
-        public int $category_id,
-        public string $created_at,
-        public string $updated_at,
+        public int    $categoryId,
     ) {}
 
     public static function fromModel(ProductModel $model): self
@@ -275,9 +273,7 @@ final readonly class Product
             description: $model->description,
             price: $model->price,
             quantity: $model->quantity,
-            category_id: $model->category_id,
-            created_at: $model->created_at->toIso8601String(),
-            updated_at: $model->updated_at->toIso8601String(),
+            categoryId: $model->category_id,
         );
     }
 }
@@ -311,12 +307,10 @@ class ProductTransformer
         return [
             'id' => $product->id,
             'name' => $product->name,
-            'description' => $product->description,
             'price' => $product->price,
             'quantity' => $product->quantity,
-            'category_id' => $product->category_id,
-            'created_at' => $product->created_at,
-            'updated_at' => $product->updated_at,
+            'description' => $product->description,
+            'category_id' => $product->categoryId,
         ];
     }
 }
@@ -380,54 +374,6 @@ POST /api/v1/orders            (existing, auth.required middleware)
 
 ### 5. **Form Request Pattern**
 
-**Purpose:** Decouple admin write intentions from their execution
-
-**Location:** `app/CQRS/`
-
-```
-app/CQRS/
-├── CommandBus.php                          # Resolves and dispatches to handler
-├── Commands/
-│   ├── CommandInterface.php               # Marker interface for all commands
-│   ├── Product/
-│   │   └── CreateProductCommand.php       # Immutable value object
-│   └── Order/
-│       ├── CreateOrderCommand.php
-│       └── CreateOrderCommandItem.php
-└── Handlers/
-    ├── CommandHandlerInterface.php        # Contract for all handlers
-    ├── Product/
-    │   └── CreateProductCommandHandler.php
-    └── Order/
-        └── CreateOrderCommandHandler.php
-```
-
-**How it works:**
-
-1. An admin HTTP request hits an `Admin*Controller` under `Api/V1/Admin/`.
-2. The controller constructs an immutable **Command** value object from the validated request.
-3. The controller calls `CommandBus::dispatch($command)`.
-4. The bus resolves the registered **Handler** from the Laravel container and calls `handle($command)`.
-5. The handler delegates to the existing **Service** layer — no business logic lives in the handler itself.
-
-**Admin routes** (all under `admin.required` middleware):
-
-| Method | URI | Name |
-|--------|-----|------|
-| `POST` | `/api/v1/admin/products` | `v1.admin.products.store` |
-| `POST` | `/api/v1/admin/orders` | `v1.admin.orders.store` |
-
-**Service interfaces:** `ProductServiceInterface` and `OrderServiceInterface` are bound in `AppServiceProvider` so the container can inject them into handlers. The concrete `ProductService` / `OrderService` classes implement these interfaces — no changes to existing service behaviour.
-
-**Benefits:**
-- Admin intent is explicit and auditable (each command is a named, typed object)
-- Handlers are thin bridges — business logic stays in services
-- Easy to extend: add a command + handler + route, nothing else changes
-- Fully testable: handlers mock the service interface; feature tests hit the full stack
-
----
-
-### 5. **Form Request Pattern**
 
 **Purpose:** Validate and normalize input
 
@@ -681,13 +627,20 @@ What it should NOT do:
 POST /api/v1/products
 {
   "name": "New Product",
+  "description": "Product description",
   "price": 99.99,
+  "quantity": 10,
   "category_id": 1
 }
 
 ↓ CreateProductRequest (validates)
 
 ↓ CreateProductController::store()
+  - Constructs CreateProductCommand from validated input
+  - Dispatches via CommandBus
+
+↓ CreateProductCommandHandler::handle()
+  - Delegates to ProductService
 
 ↓ ProductService::createProduct(UnpersistedProduct)
   - Opens DB transaction
@@ -715,7 +668,10 @@ POST /api/v1/products
   "data": {
     "id": 1,
     "name": "New Product",
-    ...
+    "price": 99.99,
+    "quantity": 10,
+    "description": "Product description",
+    "category_id": 1
   },
   "message": "Product created successfully"
 }
@@ -820,20 +776,27 @@ Both aliases are registered in `bootstrap/app.php`.
 routes/api.php
 ├── Public (no middleware)
 │   ├── GET /products, GET /products/{id}
-│   └── GET /categories, GET /categories/{id}, GET /categories/{id}/subcategories
+│   ├── GET /categories, GET /categories/{id}, GET /categories/{id}/subcategories
+│   └── POST /webhooks/payments
 │
 ├── auth.required
-│   ├── POST   /orders          (place order)
+│   ├── POST   /orders          (place order — dispatches CreateOrderCommand via CommandBus)
 │   ├── GET    /orders          (scoped to own orders for non-admins)
 │   ├── GET    /orders/{id}     (own order only for non-admins)
 │   └── PUT    /orders/{id}     (restricted transitions for non-admins)
 │
 └── admin.required
-    ├── POST|PUT|DELETE /products    (CreateProductController now dispatches CreateProductCommand)
-    ├── GET /products/{id}/inventory-history
-    ├── POST|PUT|DELETE /categories
+    ├── POST   /products        (dispatches CreateProductCommand via CommandBus)
+    ├── PUT    /products/{id}
+    ├── DELETE /products/{id}
+    ├── GET    /products/{id}/inventory-history
+    ├── POST   /categories
+    ├── PUT    /categories/{id}
+    ├── DELETE /categories/{id}
     └── DELETE /orders/{id}
 ```
+
+> **Note:** The CQRS command bus is used by `CreateProductController` and `CreateOrderController` (the regular controllers), not by separate admin controllers. The `Admin*Controller` classes exist in `app/Http/Controllers/Api/V1/Admin/` but are not currently registered in the routes.
 
 ### Controller-level Ownership Checks
 
@@ -1151,7 +1114,7 @@ The `AuditLogger` is a singleton service injected into all domain services (`Pro
 |---------|---------------|
 | **ProductService** | `product.created`, `product.updated`, `product.deleted` |
 | **CategoryService** | `category.created`, `category.updated`, `category.deleted` |
-| **OrderService** | `order.created`, `order.updated`, `order.deleted` |
+| **OrderService** | `order.created`, `order.paid`, `order.updated`, `order.deleted` |
 
 ### Log entry structure
 
@@ -1397,6 +1360,7 @@ Located in `resources/views/emails/`:
 
 ---
 
+## Error Handling
 
 ### Exception Hierarchy
 

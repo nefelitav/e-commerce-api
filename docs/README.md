@@ -135,8 +135,7 @@ Contains:
 
 ### "I need to use the API"
 1. Read: API_DOCUMENTATION.md (endpoints and examples)
-2. Reference: QUICK_REFERENCE.md (if exists, for quick lookups)
-3. Test: Use Postman/curl with provided examples
+2. Test: Use Postman/curl with provided examples
 
 ### "I need to understand the code"
 1. Read: PROJECT_OVERVIEW.md (overview)
@@ -171,7 +170,6 @@ Contains:
 ### Frontend Developer
 **Focus on API integration**
 - Start: API_DOCUMENTATION.md
-- Reference: QUICK_REFERENCE.md (if available)
 - Example: See "Common API Workflows" section
 
 ### Backend Developer
@@ -253,12 +251,12 @@ Contains:
 
 ```
 docs/
-├── README_DOCUMENTATION.md          (this file)
-├── PROJECT_OVERVIEW.md              (what, why, how)
-├── API_DOCUMENTATION.md             (endpoints, examples)
-├── ARCHITECTURE.md                  (design, patterns)
-├── SETUP_AND_DEVELOPMENT.md         (how to dev)
-└── DATABASE_SCHEMA.md               (data model)
+├── README.md                            (this file)
+├── PROJECT_OVERVIEW.md                  (what, why, how)
+├── API_DOCUMENTATION.md                 (endpoints, examples)
+├── ARCHITECTURE.md                      (design, patterns)
+├── SETUP_AND_DEVELOPMENT.md             (how to dev)
+└── DATABASE_SCHEMA.md                   (data model)
 ```
 
 ---
@@ -296,9 +294,14 @@ docs/
 | Service Layer | ARCHITECTURE.md |
 | DTOs | ARCHITECTURE.md |
 | Transformers | ARCHITECTURE.md |
+| CQRS Command Bus | ARCHITECTURE.md |
 | Filtering | API_DOCUMENTATION.md |
 | Pagination | API_DOCUMENTATION.md |
 | Sorting | API_DOCUMENTATION.md |
+| Webhooks | ARCHITECTURE.md, API_DOCUMENTATION.md |
+| Email Notifications | ARCHITECTURE.md |
+| Caching | ARCHITECTURE.md |
+| Audit Logging | ARCHITECTURE.md |
 | Migrations | SETUP_AND_DEVELOPMENT.md |
 | Testing | SETUP_AND_DEVELOPMENT.md |
 | Performance | SETUP_AND_DEVELOPMENT.md |
@@ -315,7 +318,7 @@ docs/
 2. **Follow Links** - Documents reference each other, follow them for related info
 3. **Search** - Use Ctrl+F (Cmd+F on Mac) to search within documents
 4. **Start with Overview** - Always start with PROJECT_OVERVIEW.md if you're new
-5. **Bookmark Frequently Used** - Bookmark QUICK_REFERENCE.md for quick lookups
+5. **Bookmark Frequently Used** - Bookmark API_DOCUMENTATION.md for quick lookups
 6. **Keep Documentation Updated** - Update docs when you change code
 7. **Use Examples** - Every section has examples, run them to learn
 
@@ -391,9 +394,9 @@ If you can't find what you need:
 - **Total Documents**: 5 main + 1 index
 - **Total Pages**: ~50+
 - **Code Examples**: 100+
-- **API Endpoints**: 25+
-- **Tables**: 8
-- **Design Patterns**: 5
+- **API Endpoints**: 20+ RESTful endpoints
+- **Tables**: 6 core (users, categories, products, orders, order_items, inventory_history)
+- **Design Patterns**: 6 (Repository, Service, DTO, Transformer, Form Request, CQRS Command Bus)
 
 ---
 
@@ -429,8 +432,8 @@ This documentation covers:
 
 ---
 
-**Last Updated:** 2024
-**Version:** 1.0
+**Last Updated:** March 2026
+**Version:** 1.1
 **Status:** Complete and Comprehensive
 
 For any questions or updates needed, please refer to the specific documentation file listed above.

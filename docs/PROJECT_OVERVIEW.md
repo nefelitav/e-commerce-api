@@ -86,6 +86,12 @@
 - Converts DTOs to API response format
 - Located in: `app/Transformers/`
 
+#### 6. **CQRS Command Bus Pattern**
+- Decouples write intent from execution
+- Immutable command value objects
+- Thin handlers delegate to service layer
+- Located in: `app/CQRS/`
+
 ### Layered Architecture
 
 ```
@@ -220,6 +226,21 @@ YOUR app calls warehouse ───── OUTBOUND webhook
 
 ```
 app/
+├── CQRS/                             # Command Bus Pattern
+│   ├── CommandBus.php
+│   ├── Commands/
+│   │   ├── CommandInterface.php
+│   │   ├── Order/
+│   │   │   ├── CreateOrderCommand.php
+│   │   │   └── CreateOrderCommandItem.php
+│   │   └── Product/
+│   │       └── CreateProductCommand.php
+│   └── Handlers/
+│       ├── CommandHandlerInterface.php
+│       ├── Order/
+│       │   └── CreateOrderCommandHandler.php
+│       └── Product/
+│           └── CreateProductCommandHandler.php
 ├── Dto/                          # Data Transfer Objects
 │   ├── Category/
 │   ├── InventoryHistory/
@@ -236,7 +257,9 @@ app/
 │   ├── BadRequestException.php
 │   ├── CategoryAlreadyExistsException.php
 │   ├── CategoryNotFoundException.php
+│   ├── Handler.php
 │   ├── InsufficientStockException.php
+│   ├── InvalidOrderStateException.php
 │   ├── OrderNotFoundException.php
 │   ├── ProductAlreadyExistsException.php
 │   ├── ProductNotFoundException.php
@@ -253,20 +276,34 @@ app/
 ├── Http/
 │   ├── Controllers/              # API Controllers
 │   │   └── Api/V1/
+│   │       ├── Admin/
+│   │       │   ├── Order/
+│   │       │   └── Product/
 │   │       ├── Category/
 │   │       ├── InventoryHistory/
 │   │       ├── Order/
 │   │       ├── Product/
 │   │       └── Webhook/
+│   ├── Middleware/                # Custom Middleware
+│   │   ├── RequireAdmin.php
+│   │   └── RequireAuth.php
 │   ├── Requests/                 # Form Requests (Validation)
+│   │   ├── Admin/
+│   │   │   ├── Order/
+│   │   │   └── Product/
 │   │   ├── Category/
+│   │   ├── InventoryHistory/
 │   │   ├── Order/
 │   │   ├── Product/
 │   │   └── Webhook/
 │   └── Responses/                # Response Objects
+│       ├── ApiResponse.php
+│       ├── ArrayableResponse.php
 │       ├── Category/
+│       ├── InventoryHistory/
 │       ├── Order/
-│       └── Product/
+│       ├── Product/
+│       └── Webhook/
 ├── Models/                       # Eloquent Models
 │   ├── CreatedAtUtcTrait.php
 │   ├── UpdatedAtUtcTrait.php
@@ -302,11 +339,19 @@ routes/
 tests/
 ├── E2E/                          # End-to-End Tests (full user scenarios)
 ├── Feature/                      # Feature Tests
-│   └── Controllers/
+│   ├── Controllers/
+│   └── Middleware/
 ├── Performance/                  # Performance & Throughput Tests
 ├── Security/                     # Security & Vulnerability Tests
 ├── Unit/                         # Unit Tests
+│   ├── CQRS/
+│   ├── Events/
+│   ├── Listeners/
+│   ├── Repositories/
 │   └── Services/
+├── DataProviders/                # Shared test data providers
+├── Fixtures/                     # Test fixtures (CatalogFixture, OrderFixture, UserFixture)
+├── Traits/                       # Test traits (InteractsWithShopApi, MeasuresPerformance)
 └── TestCase.php
 
 database/
@@ -320,6 +365,8 @@ config/                           # Configuration Files
 ├── cache.php
 ├── database.php
 ├── l5-swagger.php
+├── logging.php
+├── webhooks.php
 └── ...
 
 storage/
@@ -386,12 +433,12 @@ The API will be available at `http://localhost:8000/api/v1/`
 
 ## Project Statistics
 
-- **Controllers**: 20+ (CRUD operations for 5 resources)
-- **Models**: 4 core entities (Product, Category, Order, InventoryHistory)
-- **Repositories**: 5 (Data access layer)
-- **Services**: 5 (Business logic layer)
+- **Controllers**: 20+ (CRUD operations across 5 resource domains + webhooks + admin)
+- **Models**: 6 entities (UserModel, ProductModel, CategoryModel, OrderModel, OrderItemModel, InventoryHistoryModel)
+- **Repositories**: 4 (with interfaces: Product, Category, Order, InventoryHistory)
+- **Services**: 5 (Product, Category, Order, InventoryHistory, AuditLogger)
 - **Tests**: 350+ (Unit, Feature, E2E, Performance, and Security tests)
-- **API Endpoints**: 25+ RESTful endpoints
+- **API Endpoints**: 18 RESTful endpoints
 - **Lines of Code**: 3000+
 
 ---
@@ -400,8 +447,7 @@ The API will be available at `http://localhost:8000/api/v1/`
 
 For detailed documentation, see:
 - [API DOCUMENTATION](./API_DOCUMENTATION.md) - Full API endpoint reference
-- [SETUP_GUIDE.md](./SETUP_GUIDE.md) - Detailed setup instructions
-- [ARCHITECTURE.md](./ARCHITECTURE.md) - Detailed architecture guide
-- [DATABASE_SCHEMA.md](./DATABASE_SCHEMA.md) - Database structure
-- [DEVELOPMENT_GUIDE.md](./DEVELOPMENT_GUIDE.md) - Development guidelines
+- [SETUP AND DEVELOPMENT](./SETUP_AND_DEVELOPMENT.md) - Detailed setup and development instructions
+- [ARCHITECTURE](./ARCHITECTURE.md) - Detailed architecture guide
+- [DATABASE SCHEMA](./DATABASE_SCHEMA.md) - Database structure
 

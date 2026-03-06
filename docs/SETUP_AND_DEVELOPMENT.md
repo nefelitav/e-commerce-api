@@ -772,7 +772,7 @@ DB_CONNECTION=sqlite
 DB_DATABASE=database/database.sqlite
 
 # Cache
-CACHE_DRIVER=file
+CACHE_STORE=array
 
 # Queue
 QUEUE_CONNECTION=sync
@@ -782,7 +782,7 @@ WEBHOOK_ORDER_PAID_URL=
 WEBHOOK_SIGNING_SECRET=
 
 # Mail
-MAIL_DRIVER=log
+MAIL_MAILER=log
 ```
 
 ### Common Configuration Changes
@@ -803,7 +803,7 @@ DB_PASSWORD=
 
 **Enable Caching**
 ```bash
-CACHE_DRIVER=redis
+CACHE_STORE=redis
 ```
 
 ---
