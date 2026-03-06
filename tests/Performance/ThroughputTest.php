@@ -2,170 +2,101 @@
 
 namespace Tests\Performance;
 
-use App\Models\Category\CategoryModel;
 use App\Models\Order\OrderModel;
 use App\Models\Product\ProductModel;
-use App\Models\UserModel;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Symfony\Component\HttpFoundation\Response;
+use Tests\Fixtures\CatalogFixture;
+use Tests\Fixtures\OrderFixture;
+use Tests\Fixtures\UserFixture;
 use Tests\TestCase;
+use Tests\Traits\MeasuresPerformance;
 
 class ThroughputTest extends TestCase
 {
+    use MeasuresPerformance;
     use RefreshDatabase;
 
     public function test_product_listing_handles_large_dataset(): void
     {
-        $category = CategoryModel::factory()->create();
-        ProductModel::factory()->count(200)->create(['category_id' => $category->id]);
+        CatalogFixture::productsInCategory(200);
 
-        $start = microtime(true);
-
-        $response = $this->getJson(route('v1.products.index', ['per_page' => 50]));
-
-        $elapsed = (microtime(true) - $start) * 1000;
-
-        $response->assertStatus(Response::HTTP_OK);
-        $this->assertLessThan(
+        $response = $this->assertGetRespondsWithinMs(
+            route('v1.products.index', ['per_page' => 50]),
             1000,
-            $elapsed,
-            "Listing products from a 200-record dataset took {$elapsed}ms",
+            'Listing products from 200-record dataset',
         );
+        $response->assertStatus(Response::HTTP_OK);
     }
 
     public function test_paginated_products_performance_consistency(): void
     {
-        $category = CategoryModel::factory()->create();
-        ProductModel::factory()->count(100)->create(['category_id' => $category->id]);
+        CatalogFixture::productsInCategory(100);
 
-        $timings = [];
-
-        for ($page = 1; $page <= 5; $page++) {
-            $start = microtime(true);
-
-            $response = $this->getJson(route('v1.products.index', [
-                'page' => $page,
+        $this->assertMaxTimeWithinMs(5, 1000, function (int $i) {
+            $this->getJson(route('v1.products.index', [
+                'page' => $i + 1,
                 'per_page' => 20,
-            ]));
-
-            $timings[] = (microtime(true) - $start) * 1000;
-
-            $response->assertStatus(Response::HTTP_OK);
-        }
-
-        $maxTiming = max($timings);
-        $this->assertLessThan(
-            1000,
-            $maxTiming,
-            "Slowest page took {$maxTiming}ms across 5 pages of 20 items",
-        );
+            ]))->assertStatus(Response::HTTP_OK);
+        }, 'Paginated product listing');
     }
 
     public function test_concurrent_order_creation_performance(): void
     {
-        $user = UserModel::factory()->create();
+        $user = UserFixture::customer();
         $this->actingAs($user);
 
         $products = ProductModel::factory()->count(5)->create(['quantity' => 1000]);
 
-        $timings = [];
-
-        for ($i = 0; $i < 10; $i++) {
+        $this->assertAverageTimeWithinMs(10, 1000, function (int $i) use ($products) {
             $product = $products[$i % 5];
 
-            $start = microtime(true);
-
-            $response = $this->postJson(route('v1.orders.store'), [
-                'status' => 'pending',
-                'total_price' => $product->price * 2,
-                'items' => [
-                    ['product_id' => $product->id, 'quantity' => 2, 'unit_price' => $product->price],
-                ],
-            ]);
-
-            $timings[] = (microtime(true) - $start) * 1000;
-
-            $response->assertStatus(Response::HTTP_CREATED);
-        }
-
-        $avgTiming = array_sum($timings) / count($timings);
-        $this->assertLessThan(
-            1000,
-            $avgTiming,
-            "Average order creation time was {$avgTiming}ms across 10 orders",
-        );
+            $this->postJson(route('v1.orders.store'), OrderFixture::payload($product, 2))
+                ->assertStatus(Response::HTTP_CREATED);
+        }, 'Order creation');
     }
 
     public function test_category_listing_with_many_subcategories(): void
     {
-        $parent = CategoryModel::factory()->create();
-        CategoryModel::factory()->count(50)->create(['parent_id' => $parent->id]);
+        ['parent' => $parent] = CatalogFixture::categoryHierarchy(50);
 
-        $start = microtime(true);
-
-        $response = $this->getJson(route('v1.categories.subcategories', $parent->id));
-
-        $elapsed = (microtime(true) - $start) * 1000;
-
-        $response->assertStatus(Response::HTTP_OK);
-        $this->assertLessThan(
+        $response = $this->assertGetRespondsWithinMs(
+            route('v1.categories.subcategories', $parent->id),
             500,
-            $elapsed,
-            "Listing 50 subcategories took {$elapsed}ms",
+            'Listing 50 subcategories',
         );
+        $response->assertStatus(Response::HTTP_OK);
     }
 
     public function test_orders_listing_with_large_history(): void
     {
-        $user = UserModel::factory()->create();
+        $user = UserFixture::customer();
         OrderModel::factory()->count(100)->create(['user_id' => $user->id]);
-
         $this->actingAs($user);
 
-        $start = microtime(true);
-
-        $response = $this->getJson(route('v1.orders.index', ['per_page' => 25]));
-
-        $elapsed = (microtime(true) - $start) * 1000;
-
-        $response->assertStatus(Response::HTTP_OK);
-        $this->assertLessThan(
+        $response = $this->assertGetRespondsWithinMs(
+            route('v1.orders.index', ['per_page' => 25]),
             1000,
-            $elapsed,
-            "Listing orders from 100-record history took {$elapsed}ms",
+            'Listing orders from 100-record history',
         );
+        $response->assertStatus(Response::HTTP_OK);
     }
 
     public function test_product_creation_batch_performance(): void
     {
-        $admin = UserModel::factory()->admin()->create();
+        $admin = UserFixture::admin();
         $this->actingAs($admin);
 
-        $category = CategoryModel::factory()->create();
+        $category = CatalogFixture::category();
 
-        $timings = [];
-
-        for ($i = 0; $i < 20; $i++) {
-            $start = microtime(true);
-
-            $response = $this->postJson(route('v1.products.store'), [
+        $this->assertAverageTimeWithinMs(20, 500, function (int $i) use ($category) {
+            $this->postJson(route('v1.products.store'), [
                 'name' => "Batch Product {$i}",
                 'description' => "Batch test product number {$i}",
                 'price' => 10.00 + $i,
                 'quantity' => 100,
                 'category_id' => $category->id,
-            ]);
-
-            $timings[] = (microtime(true) - $start) * 1000;
-
-            $response->assertStatus(Response::HTTP_CREATED);
-        }
-
-        $avgTiming = array_sum($timings) / count($timings);
-        $this->assertLessThan(
-            500,
-            $avgTiming,
-            "Average product creation time was {$avgTiming}ms across 20 products",
-        );
+            ])->assertStatus(Response::HTTP_CREATED);
+        }, 'Product creation');
     }
 }

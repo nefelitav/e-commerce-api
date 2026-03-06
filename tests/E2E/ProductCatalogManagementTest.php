@@ -2,19 +2,22 @@
 
 namespace Tests\E2E;
 
-use App\Models\Category\CategoryModel;
-use App\Models\UserModel;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Symfony\Component\HttpFoundation\Response;
+use Tests\Fixtures\CatalogFixture;
+use Tests\Fixtures\OrderFixture;
+use Tests\Fixtures\UserFixture;
 use Tests\TestCase;
+use Tests\Traits\InteractsWithShopApi;
 
 class ProductCatalogManagementTest extends TestCase
 {
+    use InteractsWithShopApi;
     use RefreshDatabase;
 
     public function test_full_catalog_setup_with_nested_categories_and_products(): void
     {
-        $admin = UserModel::factory()->admin()->create();
+        $admin = UserFixture::admin();
         $this->actingAs($admin);
 
         $parentCategoryResponse = $this->postJson(route('v1.categories.store'), [
@@ -44,25 +47,11 @@ class ProductCatalogManagementTest extends TestCase
         $this->getJson(route('v1.categories.subcategories', $parentCategoryId))
             ->assertStatus(Response::HTTP_OK);
 
-        $shirtResponse = $this->postJson(route('v1.products.store'), [
-            'name' => 'Cotton T-Shirt',
-            'description' => 'Comfortable cotton t-shirt',
-            'price' => 29.99,
-            'quantity' => 100,
-            'category_id' => $menCategoryId,
-        ]);
-        $shirtResponse->assertStatus(Response::HTTP_CREATED);
-        $shirtId = $shirtResponse->json('data.id');
+        ['productId' => $shirtId] = $this->createProductViaApi('Cotton T-Shirt', 29.99, 100, $menCategoryId, $admin);
 
-        $this->postJson(route('v1.products.store'), [
-            'name' => 'Summer Dress',
-            'description' => 'Light summer dress',
-            'price' => 59.99,
-            'quantity' => 50,
-            'category_id' => $womenCategoryId,
-        ])->assertStatus(Response::HTTP_CREATED);
+        $this->createProductViaApi('Summer Dress', 59.99, 50, $womenCategoryId, $admin);
 
-        $guest = UserModel::factory()->create();
+        $guest = UserFixture::customer();
         $this->actingAs($guest);
 
         $this->getJson(route('v1.products.index'))->assertStatus(Response::HTTP_OK);
@@ -91,29 +80,17 @@ class ProductCatalogManagementTest extends TestCase
 
     public function test_admin_creates_product_customer_orders_then_views_inventory(): void
     {
-        $admin = UserModel::factory()->admin()->create();
-        $customer = UserModel::factory()->create();
+        ['admin' => $admin, 'customer' => $customer] = UserFixture::adminAndCustomer();
 
         $this->actingAs($admin);
-        $category = CategoryModel::factory()->create(['name' => 'Gadgets']);
+        $category = CatalogFixture::category(['name' => 'Gadgets']);
 
-        $productResponse = $this->postJson(route('v1.products.store'), [
-            'name' => 'Portable Charger',
-            'price' => 39.99,
-            'quantity' => 20,
-            'category_id' => $category->id,
-        ]);
-        $productResponse->assertStatus(Response::HTTP_CREATED);
-        $productId = $productResponse->json('data.id');
+        ['productId' => $productId] = $this->createProductViaApi('Portable Charger', 39.99, 20, $category->id, $admin);
 
         $this->actingAs($customer);
-        $this->postJson(route('v1.orders.store'), [
-            'status' => 'pending',
-            'total_price' => 79.98,
-            'items' => [
-                ['product_id' => $productId, 'quantity' => 2, 'unit_price' => 39.99],
-            ],
-        ])->assertStatus(Response::HTTP_CREATED);
+        $realProduct = \App\Models\Product\ProductModel::findOrFail($productId);
+        $this->postJson(route('v1.orders.store'), OrderFixture::payload($realProduct, 2))
+            ->assertStatus(Response::HTTP_CREATED);
 
         $this->assertDatabaseHas('products', ['id' => $productId, 'quantity' => 18]);
 
@@ -131,7 +108,7 @@ class ProductCatalogManagementTest extends TestCase
 
     public function test_category_hierarchy_browsing(): void
     {
-        $admin = UserModel::factory()->admin()->create();
+        $admin = UserFixture::admin();
         $this->actingAs($admin);
 
         $electronicsResponse = $this->postJson(route('v1.categories.store'), [
@@ -155,19 +132,8 @@ class ProductCatalogManagementTest extends TestCase
         ]);
         $laptopsId = $laptopsResponse->json('data.id');
 
-        $this->postJson(route('v1.products.store'), [
-            'name' => 'iPhone 16',
-            'price' => 999,
-            'quantity' => 30,
-            'category_id' => $phonesId,
-        ])->assertStatus(Response::HTTP_CREATED);
-
-        $this->postJson(route('v1.products.store'), [
-            'name' => 'MacBook Pro',
-            'price' => 2499,
-            'quantity' => 15,
-            'category_id' => $laptopsId,
-        ])->assertStatus(Response::HTTP_CREATED);
+        $this->createProductViaApi('iPhone 16', 999, 30, $phonesId, $admin);
+        $this->createProductViaApi('MacBook Pro', 2499, 15, $laptopsId, $admin);
 
         $this->getJson(route('v1.categories.subcategories', $electronicsId))
             ->assertStatus(Response::HTTP_OK);

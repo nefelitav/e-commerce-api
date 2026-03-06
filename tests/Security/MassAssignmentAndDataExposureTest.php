@@ -2,11 +2,11 @@
 
 namespace Tests\Security;
 
-use App\Models\Category\CategoryModel;
-use App\Models\Product\ProductModel;
-use App\Models\UserModel;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Symfony\Component\HttpFoundation\Response;
+use Tests\Fixtures\CatalogFixture;
+use Tests\Fixtures\OrderFixture;
+use Tests\Fixtures\UserFixture;
 use Tests\TestCase;
 
 class MassAssignmentAndDataExposureTest extends TestCase
@@ -15,10 +15,10 @@ class MassAssignmentAndDataExposureTest extends TestCase
 
     public function test_product_creation_ignores_unexpected_fields(): void
     {
-        $admin = UserModel::factory()->admin()->create();
+        $admin = UserFixture::admin();
         $this->actingAs($admin);
 
-        $category = CategoryModel::factory()->create();
+        $category = CatalogFixture::category();
 
         $response = $this->postJson(route('v1.products.store'), [
             'name' => 'Safe Product',
@@ -30,37 +30,29 @@ class MassAssignmentAndDataExposureTest extends TestCase
         ]);
 
         $response->assertStatus(Response::HTTP_CREATED);
-
-        $productId = $response->json('data.id');
-        $this->assertNotEquals(999, $productId);
+        $this->assertNotEquals(999, $response->json('data.id'));
     }
 
     public function test_order_creation_ignores_unexpected_fields(): void
     {
-        $user = UserModel::factory()->create();
+        $user = UserFixture::customer();
         $this->actingAs($user);
 
-        $product = ProductModel::factory()->create(['quantity' => 10]);
+        $product = CatalogFixture::productWithStock(10);
 
-        $response = $this->postJson(route('v1.orders.store'), [
-            'status' => 'pending',
-            'total_price' => $product->price,
-            'items' => [
-                ['product_id' => $product->id, 'quantity' => 1, 'unit_price' => $product->price],
-            ],
-            'id' => 999,
-            'created_at' => '2000-01-01 00:00:00',
-        ]);
+        $payload = OrderFixture::payload($product, 1);
+        $payload['id'] = 999;
+        $payload['created_at'] = '2000-01-01 00:00:00';
+
+        $response = $this->postJson(route('v1.orders.store'), $payload);
 
         $response->assertStatus(Response::HTTP_CREATED);
-
-        $orderId = $response->json('data.id');
-        $this->assertNotEquals(999, $orderId);
+        $this->assertNotEquals(999, $response->json('data.id'));
     }
 
     public function test_category_creation_ignores_unexpected_fields(): void
     {
-        $admin = UserModel::factory()->admin()->create();
+        $admin = UserFixture::admin();
         $this->actingAs($admin);
 
         $response = $this->postJson(route('v1.categories.store'), [
@@ -72,14 +64,12 @@ class MassAssignmentAndDataExposureTest extends TestCase
         ]);
 
         $response->assertStatus(Response::HTTP_CREATED);
-
-        $categoryId = $response->json('data.id');
-        $this->assertNotEquals(999, $categoryId);
+        $this->assertNotEquals(999, $response->json('data.id'));
     }
 
     public function test_product_response_does_not_expose_sensitive_data(): void
     {
-        $product = ProductModel::factory()->create();
+        $product = CatalogFixture::product();
 
         $response = $this->getJson(route('v1.products.show', $product->id));
         $response->assertStatus(Response::HTTP_OK);
@@ -93,19 +83,15 @@ class MassAssignmentAndDataExposureTest extends TestCase
 
     public function test_order_response_does_not_expose_user_password(): void
     {
-        $user = UserModel::factory()->create();
+        $user = UserFixture::customer();
         $this->actingAs($user);
 
-        $product = ProductModel::factory()->create(['quantity' => 10]);
+        $product = CatalogFixture::productWithStock(10);
 
-        $orderResponse = $this->postJson(route('v1.orders.store'), [
-            'status' => 'pending',
-            'total_price' => $product->price,
-            'items' => [
-                ['product_id' => $product->id, 'quantity' => 1, 'unit_price' => $product->price],
-            ],
-        ]);
-
+        $orderResponse = $this->postJson(
+            route('v1.orders.store'),
+            OrderFixture::payload($product, 1),
+        );
         $orderResponse->assertStatus(Response::HTTP_CREATED);
         $orderId = $orderResponse->json('data.id');
 
@@ -147,45 +133,38 @@ class MassAssignmentAndDataExposureTest extends TestCase
 
     public function test_oversized_payload_is_handled(): void
     {
-        $admin = UserModel::factory()->admin()->create();
+        $admin = UserFixture::admin();
         $this->actingAs($admin);
 
-        $category = CategoryModel::factory()->create();
+        $category = CatalogFixture::category();
 
-        $response = $this->postJson(route('v1.products.store'), [
+        $this->postJson(route('v1.products.store'), [
             'name' => 'Oversized',
             'description' => str_repeat('A', 5001),
             'price' => 10.00,
             'quantity' => 5,
             'category_id' => $category->id,
-        ]);
-
-        $response->assertStatus(Response::HTTP_UNPROCESSABLE_ENTITY);
+        ])->assertStatus(Response::HTTP_UNPROCESSABLE_ENTITY);
     }
 
     public function test_order_user_id_cannot_be_spoofed_by_regular_user(): void
     {
-        $userA = UserModel::factory()->create();
-        $userB = UserModel::factory()->create();
+        $userA = UserFixture::customer();
+        $userB = UserFixture::customer();
 
         $this->actingAs($userA);
 
-        $product = ProductModel::factory()->create(['quantity' => 10]);
+        $product = CatalogFixture::productWithStock(10);
 
-        $response = $this->postJson(route('v1.orders.store'), [
-            'user_id' => $userB->id,
-            'status' => 'pending',
-            'total_price' => $product->price,
-            'items' => [
-                ['product_id' => $product->id, 'quantity' => 1, 'unit_price' => $product->price],
-            ],
-        ]);
+        $payload = OrderFixture::payload($product, 1);
+        $payload['user_id'] = $userB->id;
+
+        $response = $this->postJson(route('v1.orders.store'), $payload);
 
         $response->assertStatus(Response::HTTP_CREATED);
 
-        $orderId = $response->json('data.id');
         $this->assertDatabaseHas('orders', [
-            'id' => $orderId,
+            'id' => $response->json('data.id'),
             'user_id' => $userA->id,
         ]);
     }

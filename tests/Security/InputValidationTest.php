@@ -2,11 +2,12 @@
 
 namespace Tests\Security;
 
-use App\Models\Category\CategoryModel;
-use App\Models\Product\ProductModel;
-use App\Models\UserModel;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use PHPUnit\Framework\Attributes\DataProviderExternal;
 use Symfony\Component\HttpFoundation\Response;
+use Tests\DataProviders\SecurityDataProvider;
+use Tests\Fixtures\CatalogFixture;
+use Tests\Fixtures\UserFixture;
 use Tests\TestCase;
 
 class InputValidationTest extends TestCase
@@ -14,59 +15,41 @@ class InputValidationTest extends TestCase
     use RefreshDatabase;
 
     // ---------------------------------------------------------------
-    // SQL Injection attempts
+    // SQL Injection attempts (data-provider driven)
     // ---------------------------------------------------------------
 
-    public function test_sql_injection_in_product_name(): void
+    #[DataProviderExternal(SecurityDataProvider::class, 'sqlInjectionPayloads')]
+    public function test_sql_injection_in_product_name_is_safely_stored(string $payload): void
     {
-        $admin = UserModel::factory()->admin()->create();
+        $admin = UserFixture::admin();
         $this->actingAs($admin);
 
-        $category = CategoryModel::factory()->create();
+        $category = CatalogFixture::category();
 
         $this->postJson(route('v1.products.store'), [
-            'name' => "'; DROP TABLE products; --",
+            'name' => $payload,
             'price' => 10.00,
             'quantity' => 5,
             'category_id' => $category->id,
         ])->assertStatus(Response::HTTP_CREATED);
 
         $this->assertDatabaseCount('products', 1);
-        $this->assertDatabaseHas('products', [
-            'name' => "'; DROP TABLE products; --",
-        ]);
+        $this->assertDatabaseHas('products', ['name' => $payload]);
     }
 
-    public function test_sql_injection_in_category_name(): void
+    #[DataProviderExternal(SecurityDataProvider::class, 'sqlInjectionPayloads')]
+    public function test_sql_injection_in_category_name_is_safely_stored(string $payload): void
     {
-        $admin = UserModel::factory()->admin()->create();
+        $admin = UserFixture::admin();
         $this->actingAs($admin);
 
         $this->postJson(route('v1.categories.store'), [
-            'name' => "1'; DROP TABLE categories; --",
+            'name' => $payload,
             'description' => 'test',
             'parent_id' => null,
         ])->assertStatus(Response::HTTP_CREATED);
 
         $this->assertDatabaseCount('categories', 1);
-    }
-
-    public function test_sql_injection_in_product_description(): void
-    {
-        $admin = UserModel::factory()->admin()->create();
-        $this->actingAs($admin);
-
-        $category = CategoryModel::factory()->create();
-
-        $this->postJson(route('v1.products.store'), [
-            'name' => 'Normal Product',
-            'description' => "'; SELECT * FROM users WHERE '1'='1",
-            'price' => 10.00,
-            'quantity' => 5,
-            'category_id' => $category->id,
-        ])->assertStatus(Response::HTTP_CREATED);
-
-        $this->assertDatabaseHas('products', ['name' => 'Normal Product']);
     }
 
     public function test_sql_injection_in_product_id_parameter(): void
@@ -92,64 +75,84 @@ class InputValidationTest extends TestCase
     }
 
     // ---------------------------------------------------------------
-    // XSS (Cross-Site Scripting) attempts
+    // XSS attempts (data-provider driven)
     // ---------------------------------------------------------------
 
-    public function test_xss_in_product_name(): void
+    #[DataProviderExternal(SecurityDataProvider::class, 'xssPayloads')]
+    public function test_xss_in_product_name_returns_json_content_type(string $payload): void
     {
-        $admin = UserModel::factory()->admin()->create();
+        $admin = UserFixture::admin();
         $this->actingAs($admin);
 
-        $category = CategoryModel::factory()->create();
+        $category = CatalogFixture::category();
 
         $response = $this->postJson(route('v1.products.store'), [
-            'name' => '<script>alert("xss")</script>',
+            'name' => $payload,
             'price' => 10.00,
             'quantity' => 5,
             'category_id' => $category->id,
         ]);
 
         $response->assertStatus(Response::HTTP_CREATED);
-
-        // JSON API responses use application/json content type, which prevents
-        // browsers from interpreting inline scripts. The value is safely JSON-encoded.
         $response->assertHeader('Content-Type', 'application/json');
     }
 
-    public function test_xss_in_product_description(): void
+    #[DataProviderExternal(SecurityDataProvider::class, 'xssPayloads')]
+    public function test_xss_in_category_name_returns_json_content_type(string $payload): void
     {
-        $admin = UserModel::factory()->admin()->create();
-        $this->actingAs($admin);
-
-        $category = CategoryModel::factory()->create();
-
-        $response = $this->postJson(route('v1.products.store'), [
-            'name' => 'Safe Product',
-            'description' => '<img src=x onerror=alert("xss")>',
-            'price' => 10.00,
-            'quantity' => 5,
-            'category_id' => $category->id,
-        ]);
-
-        $response->assertStatus(Response::HTTP_CREATED);
-    }
-
-    public function test_xss_in_category_name(): void
-    {
-        $admin = UserModel::factory()->admin()->create();
+        $admin = UserFixture::admin();
         $this->actingAs($admin);
 
         $response = $this->postJson(route('v1.categories.store'), [
-            'name' => '<script>document.cookie</script>',
+            'name' => $payload,
             'description' => 'Normal description',
             'parent_id' => null,
         ]);
 
         $response->assertStatus(Response::HTTP_CREATED);
-
-        // JSON API responses use application/json content type, which prevents
-        // browsers from interpreting inline scripts.
         $response->assertHeader('Content-Type', 'application/json');
+    }
+
+    // ---------------------------------------------------------------
+    // Invalid product prices (data-provider driven)
+    // ---------------------------------------------------------------
+
+    #[DataProviderExternal(SecurityDataProvider::class, 'invalidProductPrices')]
+    public function test_product_rejects_invalid_price(mixed $price): void
+    {
+        $admin = UserFixture::admin();
+        $this->actingAs($admin);
+
+        $category = CatalogFixture::category();
+
+        $this->postJson(route('v1.products.store'), [
+            'name' => 'Invalid Price Product',
+            'price' => $price,
+            'quantity' => 5,
+            'category_id' => $category->id,
+        ])->assertStatus(Response::HTTP_UNPROCESSABLE_ENTITY)
+            ->assertJsonValidationErrors('price');
+    }
+
+    // ---------------------------------------------------------------
+    // Invalid product quantities (data-provider driven)
+    // ---------------------------------------------------------------
+
+    #[DataProviderExternal(SecurityDataProvider::class, 'invalidProductQuantities')]
+    public function test_product_rejects_invalid_quantity(mixed $quantity): void
+    {
+        $admin = UserFixture::admin();
+        $this->actingAs($admin);
+
+        $category = CatalogFixture::category();
+
+        $this->postJson(route('v1.products.store'), [
+            'name' => 'Invalid Quantity Product',
+            'price' => 10.00,
+            'quantity' => $quantity,
+            'category_id' => $category->id,
+        ])->assertStatus(Response::HTTP_UNPROCESSABLE_ENTITY)
+            ->assertJsonValidationErrors('quantity');
     }
 
     // ---------------------------------------------------------------
@@ -158,10 +161,10 @@ class InputValidationTest extends TestCase
 
     public function test_product_name_exceeds_max_length(): void
     {
-        $admin = UserModel::factory()->admin()->create();
+        $admin = UserFixture::admin();
         $this->actingAs($admin);
 
-        $category = CategoryModel::factory()->create();
+        $category = CatalogFixture::category();
 
         $this->postJson(route('v1.products.store'), [
             'name' => str_repeat('A', 256),
@@ -174,10 +177,10 @@ class InputValidationTest extends TestCase
 
     public function test_product_description_exceeds_max_length(): void
     {
-        $admin = UserModel::factory()->admin()->create();
+        $admin = UserFixture::admin();
         $this->actingAs($admin);
 
-        $category = CategoryModel::factory()->create();
+        $category = CatalogFixture::category();
 
         $this->postJson(route('v1.products.store'), [
             'name' => 'Valid Product',
@@ -189,83 +192,9 @@ class InputValidationTest extends TestCase
             ->assertJsonValidationErrors('description');
     }
 
-    public function test_product_price_negative_value(): void
-    {
-        $admin = UserModel::factory()->admin()->create();
-        $this->actingAs($admin);
-
-        $category = CategoryModel::factory()->create();
-
-        $this->postJson(route('v1.products.store'), [
-            'name' => 'Negative Price Product',
-            'price' => -10.00,
-            'quantity' => 5,
-            'category_id' => $category->id,
-        ])->assertStatus(Response::HTTP_UNPROCESSABLE_ENTITY)
-            ->assertJsonValidationErrors('price');
-    }
-
-    public function test_product_price_zero_value(): void
-    {
-        $admin = UserModel::factory()->admin()->create();
-        $this->actingAs($admin);
-
-        $category = CategoryModel::factory()->create();
-
-        $this->postJson(route('v1.products.store'), [
-            'name' => 'Zero Price Product',
-            'price' => 0,
-            'quantity' => 5,
-            'category_id' => $category->id,
-        ])->assertStatus(Response::HTTP_UNPROCESSABLE_ENTITY)
-            ->assertJsonValidationErrors('price');
-    }
-
-    public function test_product_quantity_negative_value(): void
-    {
-        $admin = UserModel::factory()->admin()->create();
-        $this->actingAs($admin);
-
-        $category = CategoryModel::factory()->create();
-
-        $this->postJson(route('v1.products.store'), [
-            'name' => 'Negative Quantity Product',
-            'price' => 10.00,
-            'quantity' => -1,
-            'category_id' => $category->id,
-        ])->assertStatus(Response::HTTP_UNPROCESSABLE_ENTITY)
-            ->assertJsonValidationErrors('quantity');
-    }
-
-    public function test_product_price_non_numeric(): void
-    {
-        $admin = UserModel::factory()->admin()->create();
-        $this->actingAs($admin);
-
-        $this->postJson(route('v1.products.store'), [
-            'name' => 'Bad Price Product',
-            'price' => 'not-a-number',
-            'quantity' => 5,
-        ])->assertStatus(Response::HTTP_UNPROCESSABLE_ENTITY)
-            ->assertJsonValidationErrors('price');
-    }
-
-    public function test_product_quantity_non_integer(): void
-    {
-        $admin = UserModel::factory()->admin()->create();
-        $this->actingAs($admin);
-
-        $this->postJson(route('v1.products.store'), [
-            'name' => 'Bad Quantity Product',
-            'price' => 10.00,
-            'quantity' => 'five',
-        ])->assertStatus(Response::HTTP_UNPROCESSABLE_ENTITY)
-            ->assertJsonValidationErrors('quantity');
-    }
-
     public function test_product_with_nonexistent_category_id(): void
     {
-        $admin = UserModel::factory()->admin()->create();
+        $admin = UserFixture::admin();
         $this->actingAs($admin);
 
         $this->postJson(route('v1.products.store'), [
@@ -279,7 +208,7 @@ class InputValidationTest extends TestCase
 
     public function test_order_with_nonexistent_product_id(): void
     {
-        $user = UserModel::factory()->create();
+        $user = UserFixture::customer();
         $this->actingAs($user);
 
         $this->postJson(route('v1.orders.store'), [
@@ -294,10 +223,10 @@ class InputValidationTest extends TestCase
 
     public function test_order_with_zero_quantity(): void
     {
-        $user = UserModel::factory()->create();
+        $user = UserFixture::customer();
         $this->actingAs($user);
 
-        $product = ProductModel::factory()->create(['quantity' => 10]);
+        $product = CatalogFixture::productWithStock(10);
 
         $this->postJson(route('v1.orders.store'), [
             'status' => 'pending',
@@ -311,10 +240,10 @@ class InputValidationTest extends TestCase
 
     public function test_order_with_negative_quantity(): void
     {
-        $user = UserModel::factory()->create();
+        $user = UserFixture::customer();
         $this->actingAs($user);
 
-        $product = ProductModel::factory()->create(['quantity' => 10]);
+        $product = CatalogFixture::productWithStock(10);
 
         $this->postJson(route('v1.orders.store'), [
             'status' => 'pending',
@@ -328,10 +257,10 @@ class InputValidationTest extends TestCase
 
     public function test_order_with_excessive_quantity(): void
     {
-        $user = UserModel::factory()->create();
+        $user = UserFixture::customer();
         $this->actingAs($user);
 
-        $product = ProductModel::factory()->create(['quantity' => 10]);
+        $product = CatalogFixture::productWithStock(10);
 
         $this->postJson(route('v1.orders.store'), [
             'status' => 'pending',
@@ -343,15 +272,20 @@ class InputValidationTest extends TestCase
             ->assertJsonValidationErrors('items.0.quantity');
     }
 
-    public function test_order_with_invalid_status(): void
+    // ---------------------------------------------------------------
+    // Invalid order statuses (data-provider driven)
+    // ---------------------------------------------------------------
+
+    #[DataProviderExternal(SecurityDataProvider::class, 'invalidOrderStatuses')]
+    public function test_order_rejects_invalid_status(string $status): void
     {
-        $user = UserModel::factory()->create();
+        $user = UserFixture::customer();
         $this->actingAs($user);
 
-        $product = ProductModel::factory()->create(['quantity' => 10]);
+        $product = CatalogFixture::productWithStock(10);
 
         $this->postJson(route('v1.orders.store'), [
-            'status' => 'invalid_status',
+            'status' => $status,
             'total_price' => 10,
             'items' => [
                 ['product_id' => $product->id, 'quantity' => 1, 'unit_price' => 10],
@@ -362,7 +296,7 @@ class InputValidationTest extends TestCase
 
     public function test_order_with_empty_items_array(): void
     {
-        $user = UserModel::factory()->create();
+        $user = UserFixture::customer();
         $this->actingAs($user);
 
         $this->postJson(route('v1.orders.store'), [
@@ -375,7 +309,7 @@ class InputValidationTest extends TestCase
 
     public function test_order_with_missing_required_fields(): void
     {
-        $user = UserModel::factory()->create();
+        $user = UserFixture::customer();
         $this->actingAs($user);
 
         $this->postJson(route('v1.orders.store'), [])
@@ -385,7 +319,7 @@ class InputValidationTest extends TestCase
 
     public function test_category_name_exceeds_max_length(): void
     {
-        $admin = UserModel::factory()->admin()->create();
+        $admin = UserFixture::admin();
         $this->actingAs($admin);
 
         $this->postJson(route('v1.categories.store'), [
@@ -396,7 +330,7 @@ class InputValidationTest extends TestCase
 
     public function test_category_with_nonexistent_parent_id(): void
     {
-        $admin = UserModel::factory()->admin()->create();
+        $admin = UserFixture::admin();
         $this->actingAs($admin);
 
         $this->postJson(route('v1.categories.store'), [
@@ -412,7 +346,7 @@ class InputValidationTest extends TestCase
 
     public function test_malformed_json_body_returns_error(): void
     {
-        $admin = UserModel::factory()->admin()->create();
+        $admin = UserFixture::admin();
         $this->actingAs($admin);
 
         $response = $this->call(
@@ -425,7 +359,6 @@ class InputValidationTest extends TestCase
             '{invalid json',
         );
 
-        // The server should not return a 2xx success for malformed JSON
         $this->assertFalse(
             $response->isSuccessful(),
             "Server should not return a success status for malformed JSON (got {$response->getStatusCode()})",
@@ -433,51 +366,38 @@ class InputValidationTest extends TestCase
     }
 
     // ---------------------------------------------------------------
-    // Type confusion / type coercion attacks
+    // Type confusion (data-provider driven)
     // ---------------------------------------------------------------
 
-    public function test_product_id_as_string_in_order(): void
+    #[DataProviderExternal(SecurityDataProvider::class, 'typeConfusionForNumericFields')]
+    public function test_type_confusion_in_product_price(mixed $value): void
     {
-        $user = UserModel::factory()->create();
-        $this->actingAs($user);
-
-        $this->postJson(route('v1.orders.store'), [
-            'status' => 'pending',
-            'total_price' => 100,
-            'items' => [
-                ['product_id' => 'abc', 'quantity' => 1, 'unit_price' => 100],
-            ],
-        ])->assertStatus(Response::HTTP_UNPROCESSABLE_ENTITY);
-    }
-
-    public function test_boolean_values_in_numeric_fields(): void
-    {
-        $admin = UserModel::factory()->admin()->create();
+        $admin = UserFixture::admin();
         $this->actingAs($admin);
 
         $this->postJson(route('v1.products.store'), [
-            'name' => 'Boolean Product',
-            'price' => true,
-            'quantity' => false,
+            'name' => 'Type Confusion Product',
+            'price' => $value,
+            'quantity' => 5,
         ])->assertStatus(Response::HTTP_UNPROCESSABLE_ENTITY);
     }
 
-    public function test_array_value_in_string_field(): void
+    #[DataProviderExternal(SecurityDataProvider::class, 'typeConfusionForStringFields')]
+    public function test_type_confusion_in_product_name(mixed $value): void
     {
-        $admin = UserModel::factory()->admin()->create();
+        $admin = UserFixture::admin();
         $this->actingAs($admin);
 
         $this->postJson(route('v1.products.store'), [
-            'name' => ['an', 'array'],
+            'name' => $value,
             'price' => 10,
             'quantity' => 5,
-        ])->assertStatus(Response::HTTP_UNPROCESSABLE_ENTITY)
-            ->assertJsonValidationErrors('name');
+        ])->assertStatus(Response::HTTP_UNPROCESSABLE_ENTITY);
     }
 
     public function test_null_required_fields(): void
     {
-        $admin = UserModel::factory()->admin()->create();
+        $admin = UserFixture::admin();
         $this->actingAs($admin);
 
         $this->postJson(route('v1.products.store'), [
