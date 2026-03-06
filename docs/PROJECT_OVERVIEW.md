@@ -123,6 +123,7 @@
 ### 1. **Product Management**
 - List products with filtering (name, category, price range, quantity range)
 - Search across name and description (`filter[search]`)
+- Dedicated search endpoint (`GET /products/search?q=...`)
 - Filter by multiple categories at once (`filter[category_ids]`)
 - Sort by any field (id, name, price, quantity, created_at, updated_at)
 - Paginated results with metadata
@@ -148,7 +149,23 @@
 - `InsufficientStockException` thrown when quantity would go negative
 - All stock mutations are wrapped in database transactions for atomicity
 
-### 5. **Advanced Querying**
+### 5. **Coupon/Discount System**
+- Create and manage discount coupons (admin)
+- Support for percentage and fixed-amount coupon types
+- Coupon validation: active status, expiry date, usage limits, minimum order amount
+- Discount calculation preview via `POST /coupons/apply`
+- Coupons linked to orders via `coupon_id` and `discount_amount` fields
+- Full CRUD management for admins
+
+### 6. **Return/Refund System**
+- Customers can submit return requests for qualifying orders (paid, shipped, or delivered)
+- Admin approval/rejection workflow with notes
+- Approved returns automatically restore inventory (stock returned to products)
+- Approved returns transition the order to `refunded` status
+- One pending/approved return request per order
+- Full audit trail for return request lifecycle
+
+### 7. **Advanced Querying**
 - Multi-field filtering with AND logic
 - OR filtering via comma-separated values (`filter[category_ids]=1,3,7`, `filter[status]=pending,paid`)
 - Cross-field OR search (`filter[search]=laptop` matches name or description)
@@ -156,20 +173,20 @@
 - Pagination with configurable page size
 - Load related resources via includes
 
-### 6. **Caching**
+### 8. **Caching**
 - Tagged cache for categories (30-min TTL) and products (5-min TTL)
 - Automatic cache invalidation on create, update, and delete operations
 - Order placement invalidates product cache to reflect stock changes
 - Cache keys derived from query parameters via `md5(serialize())` for list endpoints
 - Configurable cache driver via `CACHE_STORE` env var (`array` for dev, `redis` for production)
 
-### 7. **Audit Logging**
+### 9. **Audit Logging**
 - All create, update, and delete operations logged to dedicated `audit` channel
 - Structured log entries with entity, action, user, properties, IP, and timestamp
 - Separate daily log file (`storage/logs/audit.log`) with 90-day retention
 - Logged at the service layer — only successful mutations are recorded
 
-### 8. **Webhooks**
+### 10. **Webhooks**
 - Inbound: `POST /api/v1/webhooks/payments` receives payment confirmations from external providers
 - Payment confirmation transitions orders from `pending` to `paid` via `markOrderAsPaid()`
 - Outbound: `order.paid` event dispatches queued webhook to configurable URL
@@ -198,7 +215,7 @@ YOUR app calls warehouse ───── OUTBOUND webhook
        Admin ships it → status: SHIPPED → DELIVERED
 ```
 
-### 9. **Email Notifications**
+### 11. **Email Notifications**
 - Queued email notifications for key order lifecycle events
 - Order confirmation email sent on order placement
 - Payment received email sent when payment is confirmed
@@ -206,13 +223,13 @@ YOUR app calls warehouse ───── OUTBOUND webhook
 - All emails dispatched via the `emails` queue with 3 retries and 30s backoff
 - Default mailer set to `log` for development (configure SMTP for production)
 
-### 10. **Standardized Responses**
+### 12. **Standardized Responses**
 - Consistent JSON format
 - Pagination metadata
 - Success/error indicators
 - Helpful messages
 
-### 11. **Request Validation**
+### 13. **Request Validation**
 - Validate all input parameters
 - Type checking (integer, string, numeric)
 - Range validation
@@ -243,12 +260,16 @@ app/
 │           └── CreateProductCommandHandler.php
 ├── Dto/                          # Data Transfer Objects
 │   ├── Category/
+│   ├── Coupon/
 │   ├── InventoryHistory/
 │   ├── Order/
-│   └── Product/
+│   ├── Product/
+│   └── ReturnRequest/
 ├── Enums/                        # Enumerations
+│   ├── CouponType.php
 │   ├── InventoryChangeType.php
-│   └── OrderStatus.php
+│   ├── OrderStatus.php
+│   └── ReturnRequestStatus.php
 ├── Events/                       # Domain Events
 │   ├── OrderCreatedEvent.php
 │   ├── OrderPaidEvent.php
@@ -280,9 +301,11 @@ app/
 │   │       │   ├── Order/
 │   │       │   └── Product/
 │   │       ├── Category/
+│   │       ├── Coupon/
 │   │       ├── InventoryHistory/
 │   │       ├── Order/
 │   │       ├── Product/
+│   │       ├── ReturnRequest/
 │   │       └── Webhook/
 │   ├── Middleware/                # Custom Middleware
 │   │   ├── RequireAdmin.php
@@ -292,42 +315,54 @@ app/
 │   │   │   ├── Order/
 │   │   │   └── Product/
 │   │   ├── Category/
+│   │   ├── Coupon/
 │   │   ├── InventoryHistory/
 │   │   ├── Order/
 │   │   ├── Product/
+│   │   ├── ReturnRequest/
 │   │   └── Webhook/
 │   └── Responses/                # Response Objects
 │       ├── ApiResponse.php
 │       ├── ArrayableResponse.php
 │       ├── Category/
+│       ├── Coupon/
 │       ├── InventoryHistory/
 │       ├── Order/
 │       ├── Product/
+│       ├── ReturnRequest/
 │       └── Webhook/
 ├── Models/                       # Eloquent Models
 │   ├── CreatedAtUtcTrait.php
 │   ├── UpdatedAtUtcTrait.php
 │   ├── UserModel.php
 │   ├── Category/
+│   ├── Coupon/
 │   ├── InventoryHistory/
 │   ├── Order/
-│   └── Product/
+│   ├── Product/
+│   └── ReturnRequest/
 ├── Repositories/                 # Data Access Layer (interface + implementation per domain)
 │   ├── Category/
+│   ├── Coupon/
 │   ├── InventoryHistory/
 │   ├── Order/
-│   └── Product/
+│   ├── Product/
+│   └── ReturnRequest/
 ├── Services/                     # Business Logic Layer (interface + implementation per domain)
 │   ├── AuditLogger.php
 │   ├── Category/
+│   ├── Coupon/
 │   ├── InventoryHistory/
 │   ├── Order/
-│   └── Product/
+│   ├── Product/
+│   └── ReturnRequest/
 ├── Transformers/                 # Response Transformation
 │   ├── CategoryTransformer.php
+│   ├── CouponTransformer.php
 │   ├── InventoryHistoryTransformer.php
 │   ├── OrderTransformer.php
-│   └── ProductTransformer.php
+│   ├── ProductTransformer.php
+│   └── ReturnRequestTransformer.php
 └── Providers/
     └── AppServiceProvider.php
 
@@ -433,13 +468,13 @@ The API will be available at `http://localhost:8000/api/v1/`
 
 ## Project Statistics
 
-- **Controllers**: 20+ (CRUD operations across 5 resource domains + webhooks + admin)
-- **Models**: 6 entities (UserModel, ProductModel, CategoryModel, OrderModel, OrderItemModel, InventoryHistoryModel)
-- **Repositories**: 4 (with interfaces: Product, Category, Order, InventoryHistory)
-- **Services**: 5 (Product, Category, Order, InventoryHistory, AuditLogger)
+- **Controllers**: 25+ (CRUD operations across 7 resource domains + webhooks + admin)
+- **Models**: 8 entities (UserModel, ProductModel, CategoryModel, OrderModel, OrderItemModel, InventoryHistoryModel, CouponModel, ReturnRequestModel)
+- **Repositories**: 6 (with interfaces: Product, Category, Order, InventoryHistory, Coupon, ReturnRequest)
+- **Services**: 7 (Product, Category, Order, InventoryHistory, Coupon, ReturnRequest, AuditLogger)
 - **Tests**: 350+ (Unit, Feature, E2E, Performance, and Security tests)
-- **API Endpoints**: 18 RESTful endpoints
-- **Lines of Code**: 3000+
+- **API Endpoints**: 30+ RESTful endpoints
+- **Lines of Code**: 4000+
 
 ---
 

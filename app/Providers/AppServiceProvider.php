@@ -18,21 +18,29 @@ use App\Listeners\SendOrderPaidWebhook;
 use App\Listeners\SendOrderShippedEmail;
 use App\Repositories\Category\CategoryRepository;
 use App\Repositories\Category\CategoryRepositoryInterface;
+use App\Repositories\Coupon\CouponRepository;
+use App\Repositories\Coupon\CouponRepositoryInterface;
 use App\Repositories\InventoryHistory\InventoryHistoryRepository;
 use App\Repositories\InventoryHistory\InventoryHistoryRepositoryInterface;
 use App\Repositories\Order\OrderRepository;
 use App\Repositories\Order\OrderRepositoryInterface;
 use App\Repositories\Product\ProductRepository;
 use App\Repositories\Product\ProductRepositoryInterface;
+use App\Repositories\ReturnRequest\ReturnRequestRepository;
+use App\Repositories\ReturnRequest\ReturnRequestRepositoryInterface;
 use App\Services\AuditLogger;
 use App\Services\Category\CategoryService;
 use App\Services\Category\CategoryServiceInterface;
+use App\Services\Coupon\CouponService;
+use App\Services\Coupon\CouponServiceInterface;
 use App\Services\Order\OrderService;
 use App\Services\Order\OrderServiceInterface;
 use App\Services\Order\OrderStatusMachine;
 use App\Services\Order\OrderStatusMachineInterface;
 use App\Services\Product\ProductService;
 use App\Services\Product\ProductServiceInterface;
+use App\Services\ReturnRequest\ReturnRequestService;
+use App\Services\ReturnRequest\ReturnRequestServiceInterface;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Router;
@@ -52,19 +60,23 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(OrderRepositoryInterface::class, OrderRepository::class);
         $this->app->bind(CategoryRepositoryInterface::class, CategoryRepository::class);
         $this->app->bind(InventoryHistoryRepositoryInterface::class, InventoryHistoryRepository::class);
+        $this->app->bind(CouponRepositoryInterface::class, CouponRepository::class);
+        $this->app->bind(ReturnRequestRepositoryInterface::class, ReturnRequestRepository::class);
 
         // Service bindings
         $this->app->bind(ProductServiceInterface::class, ProductService::class);
         $this->app->bind(OrderServiceInterface::class, OrderService::class);
         $this->app->bind(CategoryServiceInterface::class, CategoryService::class);
         $this->app->bind(OrderStatusMachineInterface::class, OrderStatusMachine::class);
+        $this->app->bind(CouponServiceInterface::class, CouponService::class);
+        $this->app->bind(ReturnRequestServiceInterface::class, ReturnRequestService::class);
 
         $this->app->singleton(CommandBus::class, function ($app) {
             return new CommandBus(
                 container: $app,
                 handlers: [
                     CreateProductCommand::class => CreateProductCommandHandler::class,
-                    CreateOrderCommand::class   => CreateOrderCommandHandler::class,
+                    CreateOrderCommand::class => CreateOrderCommandHandler::class,
                 ],
             );
         });

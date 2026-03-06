@@ -21,6 +21,8 @@ class Handler extends ExceptionHandler
         if ($e instanceof ProductNotFoundException
             || $e instanceof OrderNotFoundException
             || $e instanceof CategoryNotFoundException
+            || $e instanceof CouponNotFoundException
+            || $e instanceof ReturnRequestNotFoundException
         ) {
             return response()->json([
                 'success' => false,
@@ -60,6 +62,22 @@ class Handler extends ExceptionHandler
                 'success' => false,
                 'message' => $e->getMessage(),
                 'error' => 'Invalid Order State',
+            ], Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
+
+        if ($e instanceof InvalidCouponException) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+                'error' => 'Invalid Coupon',
+            ], Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
+
+        if ($e instanceof InvalidReturnRequestStateException) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+                'error' => 'Invalid Return Request State',
             ], Response::HTTP_UNPROCESSABLE_ENTITY);
         }
 

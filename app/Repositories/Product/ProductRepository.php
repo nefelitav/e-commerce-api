@@ -6,8 +6,8 @@ use App\Dto\Product\Product;
 use App\Dto\Product\UnpersistedProduct;
 use App\Exceptions\ProductNotFoundException;
 use App\Models\Product\ProductModel;
-use Illuminate\Support\Collection;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
@@ -16,8 +16,8 @@ class ProductRepository implements ProductRepositoryInterface
     private const TTL = 300;
 
     /**
-     * @param array<string, mixed> $filters
-     * @param array<string> $includes
+     * @param  array<string, mixed>  $filters
+     * @param  array<string>  $includes
      * @return LengthAwarePaginator<int, Product>
      */
     public function getAll(
@@ -26,27 +26,33 @@ class ProductRepository implements ProductRepositoryInterface
         string $sort = 'id',
         string $order = 'asc',
         array $filters = [],
-        array $includes = []
+        array $includes = [],
     ): LengthAwarePaginator {
-        $cacheKey = 'products.all.' . md5(serialize([$page, $perPage, $sort, $order, $filters, $includes]));
+        $cacheKey = 'products.all.'.md5(serialize([$page, $perPage, $sort, $order, $filters, $includes]));
 
         /** @var LengthAwarePaginator<int, Product> $result */
         $result = Cache::tags(['products'])->remember($cacheKey, self::TTL, function () use ($page, $perPage, $sort, $order, $filters, $includes) {
             $query = ProductModel::query();
 
-            if (!empty($includes)) {
+            if (! empty($includes)) {
                 $query->with($includes);
             }
 
             if (isset($filters['name'])) {
-                $query->where('name', 'like', '%' . $filters['name'] . '%');
+                $query->where('name', 'like', '%'.$filters['name'].'%');
             }
             if (isset($filters['search'])) {
                 $term = $filters['search'];
-                $query->where(function ($q) use ($term) {
-                    $q->where('name', 'like', '%' . $term . '%')
-                      ->orWhere('description', 'like', '%' . $term . '%');
-                });
+                /** @var \Illuminate\Database\Connection $connection */
+                $connection = $query->getConnection();
+                if ($connection->getDriverName() === 'mysql') {
+                    $query->whereFullText(['name', 'description'], $term);
+                } else {
+                    $query->where(function ($q) use ($term) {
+                        $q->where('name', 'like', '%'.$term.'%')
+                            ->orWhere('description', 'like', '%'.$term.'%');
+                    });
+                }
             }
             if (isset($filters['category_id'])) {
                 $query->where('category_id', $filters['category_id']);
@@ -73,7 +79,7 @@ class ProductRepository implements ProductRepositoryInterface
 
             $paginator = $query->paginate($perPage, ['*'], 'page', $page);
 
-            $items = $paginator->getCollection()->map(fn(ProductModel $model) => Product::fromModel($model));
+            $items = $paginator->getCollection()->map(fn (ProductModel $model) => Product::fromModel($model));
 
             return new LengthAwarePaginator(
                 $items,
@@ -103,7 +109,7 @@ class ProductRepository implements ProductRepositoryInterface
                 return [];
             }
 
-            return $products->map(fn(ProductModel $model) => Product::fromModel($model))->all();
+            return $products->map(fn (ProductModel $model) => Product::fromModel($model))->all();
         });
 
         return $result;
@@ -131,7 +137,7 @@ class ProductRepository implements ProductRepositoryInterface
     {
         assert(
             DB::transactionLevel() > 0,
-            'findByIdForUpdate must be called inside a DB transaction.'
+            'findByIdForUpdate must be called inside a DB transaction.',
         );
 
         /** @var ProductModel|null $product */
@@ -169,7 +175,7 @@ class ProductRepository implements ProductRepositoryInterface
             /** @var ProductModel|null $productModel */
             $productModel = ProductModel::query()->where('id', $id)->lockForUpdate()->first();
 
-            if (!$productModel) {
+            if (! $productModel) {
                 throw new ProductNotFoundException($id);
             }
 
@@ -191,7 +197,7 @@ class ProductRepository implements ProductRepositoryInterface
         /** @var ProductModel|null $productModel */
         $productModel = ProductModel::query()->where('id', $id)->first();
 
-        if (!$productModel) {
+        if (! $productModel) {
             throw new ProductNotFoundException($id);
         }
 

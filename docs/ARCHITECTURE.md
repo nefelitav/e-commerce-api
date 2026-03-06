@@ -776,6 +776,7 @@ Both aliases are registered in `bootstrap/app.php`.
 routes/api.php
 ├── Public (no middleware)
 │   ├── GET /products, GET /products/{id}
+│   ├── GET /products/search
 │   ├── GET /categories, GET /categories/{id}, GET /categories/{id}/subcategories
 │   └── POST /webhooks/payments
 │
@@ -783,7 +784,11 @@ routes/api.php
 │   ├── POST   /orders          (place order — dispatches CreateOrderCommand via CommandBus)
 │   ├── GET    /orders          (scoped to own orders for non-admins)
 │   ├── GET    /orders/{id}     (own order only for non-admins)
-│   └── PUT    /orders/{id}     (restricted transitions for non-admins)
+│   ├── PUT    /orders/{id}     (restricted transitions for non-admins)
+│   ├── POST   /coupons/apply   (validate and preview coupon discount)
+│   ├── POST   /return-requests (create return request)
+│   ├── GET    /return-requests (scoped to own for non-admins)
+│   └── GET    /return-requests/{id} (own only for non-admins)
 │
 └── admin.required
     ├── POST   /products        (dispatches CreateProductCommand via CommandBus)
@@ -793,7 +798,14 @@ routes/api.php
     ├── POST   /categories
     ├── PUT    /categories/{id}
     ├── DELETE /categories/{id}
-    └── DELETE /orders/{id}
+    ├── DELETE /orders/{id}
+    ├── GET    /coupons
+    ├── GET    /coupons/{id}
+    ├── POST   /coupons
+    ├── PUT    /coupons/{id}
+    ├── DELETE /coupons/{id}
+    ├── POST   /return-requests/{id}/approve
+    └── POST   /return-requests/{id}/reject
 ```
 
 > **Note:** The CQRS command bus is used by `CreateProductController` and `CreateOrderController` (the regular controllers), not by separate admin controllers. The `Admin*Controller` classes exist in `app/Http/Controllers/Api/V1/Admin/` but are not currently registered in the routes.
@@ -805,6 +817,8 @@ Routes under `auth.required` apply further checks inside the controller to enfor
 - **`GetOrderController`** — regular users receive `400 Bad Request` if `order.user_id ≠ auth.id`.
 - **`UpdateOrderController`** — regular users receive `400 Bad Request` if `order.user_id ≠ auth.id`.
 - **`ListOrdersController`** — the `user_id` filter is silently injected for non-admin requests so users can never retrieve another user's orders.
+- **`GetReturnRequestController`** — regular users receive `400 Bad Request` if `return_request.user_id ≠ auth.id`.
+- **`ListReturnRequestsController`** — the `user_id` filter is silently injected for non-admin requests so users can never retrieve another user's return requests.
 
 ---
 
@@ -1115,6 +1129,8 @@ The `AuditLogger` is a singleton service injected into all domain services (`Pro
 | **ProductService** | `product.created`, `product.updated`, `product.deleted` |
 | **CategoryService** | `category.created`, `category.updated`, `category.deleted` |
 | **OrderService** | `order.created`, `order.paid`, `order.updated`, `order.deleted` |
+| **CouponService** | `coupon.created`, `coupon.updated`, `coupon.deleted` |
+| **ReturnRequestService** | `return_request.created`, `return_request.approved`, `return_request.rejected` |
 
 ### Log entry structure
 
@@ -1371,8 +1387,12 @@ Exception
 ├── CategoryNotFoundException
 ├── CategoryAlreadyExistsException
 ├── OrderNotFoundException
+├── CouponNotFoundException
+├── ReturnRequestNotFoundException
 ├── InsufficientStockException
 ├── InvalidOrderStateException
+├── InvalidCouponException
+├── InvalidReturnRequestStateException
 ├── BadRequestException
 ├── UnprocessableEntityException
 └── ValidationException (Laravel)
