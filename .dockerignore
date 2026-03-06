@@ -1,0 +1,79 @@
+# Version control
+.git
+.gitignore
+.gitattributes
+
+# Dependencies (installed during build)
+vendor/
+node_modules/
+
+# IDE & editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*.sublime-*
+_ide_helper.php
+.editorconfig
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Environment files (secrets)
+.env
+.env.local
+.env.*.local
+.env.production
+
+# Testing & CI
+tests/
+phpunit.xml
+phpunit.xml.dist
+phpstan.neon
+.phpunit.result.cache
+.phpunit.cache/
+coverage/
+.github/
+
+# Docker (prevent recursive context)
+docker-compose.yml
+docker-compose.prod.yml
+docker-compose.override.yml
+Dockerfile
+
+# Documentation & misc
+docs/
+README.md
+CHANGELOG.md
+CONTRIBUTING.md
+LICENSE
+img.png
+*.md
+
+# Build artifacts
+storage/logs/*
+storage/framework/cache/data/*
+storage/framework/sessions/*
+storage/framework/views/*
+storage/debugbar/
+
+# Database
+database/database.sqlite
+database/factories/
+database/seeders/
+
+# Frontend build tools (not needed for API)
+vite.config.js
+package.json
+package-lock.json
+yarn.lock
+resources/css/
+resources/js/
+
+# Linting / formatting config
+pint.json
+.php-cs-fixer.cache
+.php-cs-fixer.dist.php
+

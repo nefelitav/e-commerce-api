@@ -36,7 +36,8 @@
 - **PHP 8.2+** - Programming language
 
 ### Database
-- **SQLite** (Development)
+- **PostgreSQL 16** (Docker / Production)
+- **SQLite** (Local development without Docker)
 - **Eloquent ORM** - Database abstraction layer
 - **Migrations** - Database versioning
 
