@@ -7,10 +7,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev \
     libfcgi-bin \
     && docker-php-ext-install pdo pdo_pgsql opcache \
-    && pecl install redis \
+    && pecl install redis-6.3.0 \
     && docker-php-ext-enable redis \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* /tmp/pear
+
+# Enable /ping endpoint for health checks in all stages (dev + prod)
+COPY docker/php/php-fpm-healthcheck.conf /usr/local/etc/php-fpm.d/zz-healthcheck.conf
 
 WORKDIR /var/www
 
@@ -31,6 +34,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 RUN mv "$PHP_INI_DIR/php.ini-development" "$PHP_INI_DIR/php.ini"
+
+COPY docker/php/php-dev.ini $PHP_INI_DIR/conf.d/php-dev.ini
 
 EXPOSE 9000
 CMD ["php-fpm"]
@@ -71,6 +76,7 @@ LABEL maintainer="shop-api-team" \
 RUN mv "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini"
 
 COPY docker/php/opcache-prod.ini $PHP_INI_DIR/conf.d/opcache-prod.ini
+COPY docker/php/security-prod.ini $PHP_INI_DIR/conf.d/security-prod.ini
 COPY docker/php/php-fpm-prod.conf /usr/local/etc/php-fpm.d/zz-prod.conf
 
 COPY --from=build --chown=www-data:www-data /var/www /var/www

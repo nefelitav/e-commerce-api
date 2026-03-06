@@ -99,6 +99,78 @@ The API is now available at `http://localhost:8000/api/v1/`
 
 ---
 
+## Docker Development Setup
+
+The project includes a full Docker setup with PHP-FPM, Nginx, PostgreSQL 16, and Redis.
+
+### 1. Start All Services
+
+```bash
+docker compose up -d --build
+```
+
+This starts:
+- **app** — PHP 8.3-FPM (dev target)
+- **queue** — Laravel queue worker for background jobs
+- **nginx** — Reverse proxy on port 8081
+- **postgres** — PostgreSQL 16 database
+- **redis** — Redis 7 for caching and queues
+
+### 2. Install Dependencies & Setup
+
+```bash
+docker compose exec app composer install
+docker compose exec app cp .env.example .env
+docker compose exec app php artisan key:generate
+docker compose exec app php artisan migrate
+```
+
+### 3. Access the API
+
+The API is available at `http://localhost:8081/api/v1/`
+
+### 4. Running Commands Inside the Container
+
+```bash
+docker compose exec app php artisan <command>
+docker compose exec app composer <command>
+```
+
+### 5. Viewing Logs
+
+```bash
+docker compose logs -f app
+docker compose logs -f queue
+```
+
+### 6. Stopping Services
+
+```bash
+docker compose down
+```
+
+### Environment Variables
+
+Database credentials are configured via environment variables with defaults:
+
+| Variable            | Default | Description        |
+|---------------------|---------|--------------------|
+| `POSTGRES_DB`       | `shop`  | Database name      |
+| `POSTGRES_USER`     | `shop`  | Database user      |
+| `POSTGRES_PASSWORD` | `secret`| Database password  |
+
+Override them by creating a `.env` file in the project root or exporting them in your shell.
+
+### Production Deployment
+
+Use the production compose override to build optimised images with no volume mounts and no exposed database/redis ports:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+```
+
+---
+
 ## Development Workflow
 
 ### Daily Development Setup

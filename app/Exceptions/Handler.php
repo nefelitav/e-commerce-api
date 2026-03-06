@@ -3,8 +3,8 @@
 namespace App\Exceptions;
 
 use Illuminate\Foundation\Exceptions\Handler as ExceptionHandler;
-use Throwable;
 use Symfony\Component\HttpFoundation\Response;
+use Throwable;
 
 class Handler extends ExceptionHandler
 {
@@ -61,6 +61,14 @@ class Handler extends ExceptionHandler
                 'message' => $e->getMessage(),
                 'error' => 'Invalid Order State',
             ], Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
+
+        if (app()->environment('production')) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Internal server error.',
+                'error' => 'Server Error',
+            ], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
 
         return parent::render($request, $e);
