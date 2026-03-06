@@ -275,6 +275,27 @@ php artisan test tests/Unit
 php artisan test tests/Feature
 ```
 
+### Run E2E Tests Only
+```bash
+php artisan test --testsuite=E2E
+```
+
+E2E tests simulate full user scenarios that span multiple API calls, such as browsing products, placing orders, processing payments, and shipping. They live in `tests/E2E/`.
+
+### Run Performance Tests Only
+```bash
+php artisan test --testsuite=Performance
+```
+
+Performance tests verify that critical API endpoints respond within acceptable time thresholds and handle large datasets efficiently. They live in `tests/Performance/`.
+
+### Run Security Tests Only
+```bash
+php artisan test --testsuite=Security
+```
+
+Security tests check for common vulnerabilities including SQL injection, XSS, authentication/authorization bypass, webhook signature verification, input validation, mass assignment, order state manipulation, and data exposure. They live in `tests/Security/`.
+
 ### Run Tests with Coverage
 ```bash
 php artisan test --coverage

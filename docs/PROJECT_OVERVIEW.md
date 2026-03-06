@@ -300,8 +300,11 @@ routes/
 └── web.php
 
 tests/
+├── E2E/                          # End-to-End Tests (full user scenarios)
 ├── Feature/                      # Feature Tests
 │   └── Controllers/
+├── Performance/                  # Performance & Throughput Tests
+├── Security/                     # Security & Vulnerability Tests
 ├── Unit/                         # Unit Tests
 │   └── Services/
 └── TestCase.php
@@ -387,7 +390,7 @@ The API will be available at `http://localhost:8000/api/v1/`
 - **Models**: 4 core entities (Product, Category, Order, InventoryHistory)
 - **Repositories**: 5 (Data access layer)
 - **Services**: 5 (Business logic layer)
-- **Tests**: 20+ (Feature and Unit tests)
+- **Tests**: 350+ (Unit, Feature, E2E, Performance, and Security tests)
 - **API Endpoints**: 25+ RESTful endpoints
 - **Lines of Code**: 3000+
 
