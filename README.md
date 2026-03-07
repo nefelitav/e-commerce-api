@@ -42,7 +42,6 @@ The API will be available at `http://localhost:8000/api/v1/`
 
 Complete documentation is available in the `docs/` directory:
 
-- **[docs/README.md](./docs/README.md)** - Documentation navigation guide (START HERE)
 - **[docs/PROJECT_OVERVIEW.md](./docs/PROJECT_OVERVIEW.md)** - Project description and goals
 - **[docs/API_DOCUMENTATION.md](./docs/API_DOCUMENTATION.md)** - Complete API reference
 - **[docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)** - Design patterns and architecture
