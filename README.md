@@ -1,8 +1,23 @@
 # Shop API
 
-A comprehensive RESTful API for e-commerce built with Laravel 12, featuring advanced filtering, sorting, and pagination capabilities.
+A comprehensive RESTful API for e-commerce built with Laravel 12.
 
 ## 🚀 Quick Start
+
+### With Docker Compose
+
+```bash
+# Start all services (app, queue worker, Nginx, PostgreSQL, Redis)
+docker compose up -d
+
+# Run migrations and seed the database
+docker compose exec app php artisan migrate
+docker compose exec app php artisan db:seed
+```
+
+The API will be available at `http://localhost:8081/api/v1/`
+
+### Without Docker
 
 ```bash
 # Install dependencies
@@ -33,85 +48,131 @@ Complete documentation is available in the `docs/` directory:
 - **[docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)** - Design patterns and architecture
 - **[docs/SETUP_AND_DEVELOPMENT.md](./docs/SETUP_AND_DEVELOPMENT.md)** - Setup and development guide
 - **[docs/DATABASE_SCHEMA.md](./docs/DATABASE_SCHEMA.md)** - Database schema documentation
+- **[docs/UML_DIAGRAMS.md](./docs/UML_DIAGRAMS.md)** - UML diagrams (ERD, component, deployment, state & sequence)
 
 ## 🎯 Features
 
-- ✅ RESTful API with 25+ endpoints
+- ✅ RESTful API with 30+ endpoints
 - ✅ Advanced filtering and sorting
 - ✅ Pagination with metadata
+- ✅ Rate limiting
+- ✅ API versioning
+- ✅ RBAC
+- ✅ Product search
 - ✅ Request validation
 - ✅ Standardized responses
 - ✅ Comprehensive error handling
-- ✅ Repository pattern
-- ✅ Service layer architecture
+- ✅ Hexagonal architecture
 - ✅ Full test coverage
 - ✅ Caching
+- ✅ Event-driven architecture with domain events and listeners
 - ✅ Pessimistic locking for inventory mutations
+- ✅ Webhooks for external integrations
+- ✅ Inventory audit trail
+- ✅ State engines for orders
+- ✅ Dockerized development environment
+- ✅ Detailed documentation
+- ✅ CI/CD ready
+- ✅ Performance optimizations (eager loading, indexing, caching)
+- ✅ Security best practices (input sanitization, prepared statements, auth & permissions)
 
-## 📊 Entity Relationships
-
-```mermaid
-classDiagram
-    User "1" --> "0..*" Order : places
-    Order "1" --> "1..*" OrderItem : contains
-    Product "1" --> "0..*" OrderItem : appears_in
-    Product "1" --> "0..*" InventoryHistory : tracks
-    Category "1" --> "0..*" Product : contains
-    Category "0..1" --> "0..*" Category : parent
-```
 
 ## 🔧 Technology Stack
 
 - **Laravel 12** - PHP Framework
 - **PHP 8.2+** - Programming Language
-- **SQLite** - Database
+- **PostgreSQL 16** - Primary Database
+- **Redis 7** - Caching & Queues
+- **Nginx** - Web Server
+- **Docker** - Containerisation
 - **PHPUnit** - Testing Framework
-- **L5 Swagger** - API Documentation
 
 ## 📋 API Resources
 
 ### Products
 - List products with filters (name, category, price, quantity)
+- Full-text search across products
 - Sort by any field
 - Include category relationships
 - Pagination support
+- Admin: CRUD operations & inventory history
 
 ### Categories
 - Hierarchical structure (parent-child)
 - Filter by parent category
 - List subcategories
-- Full CRUD operations
+- Admin: full CRUD operations
 
 ### Orders
-- Create and manage orders
+- Create orders with multiple items (stock validation & pessimistic locking)
 - Filter by status or price range
 - Track order items
 - User-specific orders
+- Status lifecycle: pending → paid → shipped → delivered / cancelled / refunded
+
+### Coupons
+- Apply coupon codes to orders (percentage or fixed amount)
+- Validates min order amount, max uses, and expiry
+- Returns discount breakdown (original total, discount, final total)
+- Admin: full CRUD operations
+
+### Return Requests
+- Submit return requests for orders
+- Track return status (pending → approved / rejected)
+- Admin: approve or reject with notes
 
 ### Inventory History
-- Track stock changes
-- Audit trail
-- Product-specific history
+- Full audit trail of stock changes
+- Change types: addition, removal, sale, return, adjustment, transfer
+- Product-specific history (admin only)
+
+### Webhooks
+- Payment webhook endpoint for external providers
+- Marks orders as paid and triggers event-driven notifications
 
 ## 🚀 Quick API Examples
 
 ```bash
-# List all products
-GET /api/v1/products
+# Search products by keyword with price range filter
+GET /api/v1/products/search?q=wireless&filter[min_price]=50&filter[max_price]=300&sort=price&order=asc
 
-# Filter products by category and price
-GET /api/v1/products?filter[category_id]=1&filter[min_price]=100&filter[max_price]=500
+# List products across multiple categories, sorted by newest
+GET /api/v1/products?filter[category_ids]=1,3,5&sort=created_at&order=desc
 
-# Sort products by price
-GET /api/v1/products?sort=price&order=asc
+# Get a category's subcategories
+GET /api/v1/categories/1/subcategories
 
-# Get product with category
-GET /api/v1/products?include=category
+# Create an order with multiple items (validates stock with pessimistic locking)
+POST /api/v1/orders
+{
+  "status": "pending",
+  "total_price": 259.98,
+  "items": [
+    { "product_id": 1, "quantity": 2, "unit_price": 99.99 },
+    { "product_id": 5, "quantity": 1, "unit_price": 60.00 }
+  ]
+}
 
-# List root categories
-GET /api/v1/categories?filter[parent_id]=null
+# Apply a coupon code and preview the discount breakdown
+POST /api/v1/coupons/apply
+{ "code": "SUMMER25", "order_total": 259.98 }
+# → { "discount_amount": 64.99, "original_total": 259.98, "final_total": 194.99 }
 
-# Get pending orders
+# Submit a return request
+POST /api/v1/return-requests
+{ "order_id": 42, "reason": "Product arrived damaged" }
+
+# Admin: approve a return request
+POST /api/v1/return-requests/7/approve
+
+# Process a payment webhook (external provider callback)
+POST /api/v1/webhooks/payments
+{ "order_id": 42, "payment_reference": "pay_abc123" }
+
+# Admin: view inventory audit trail for a product
+GET /api/v1/products/1/inventory-history
+
+# List pending orders sorted by most recent
 GET /api/v1/orders?filter[status]=pending&sort=created_at&order=desc
 ```
 
@@ -128,66 +189,52 @@ php artisan test tests/Feature/Controllers/Product/ListProductsControllerTest.ph
 php artisan test --coverage
 ```
 
-## 📖 API Documentation
-
-Access Swagger UI at: `http://localhost:8000/api/documentation`
-
-Generate documentation:
-```bash
-php artisan l5-swagger:generate
-```
-
-
-```bash
-# Run development server
-php artisan serve
-
-# Watch logs
-php artisan pail
-
-# Run migrations
-php artisan migrate
-
-# Run seeds
-php artisan db:seed
-
-# Clear cache
-php artisan cache:clear
-```
-
 ## 📦 Project Structure
 
 ```
 app/
+├── CQRS/                   # Command Query Responsibility Segregation
+│   ├── Commands/           # Command definitions (Order, Product)
+│   └── Handlers/           # Command handlers
 ├── Dto/                    # Data Transfer Objects
+├── Enums/                  # Enums (CouponType, OrderStatus, etc.)
+├── Events/                 # Domain events (OrderCreated, OrderPaid, etc.)
+├── Listeners/              #   ↳ Event listeners (emails, webhooks)
+├── Mail/                   #   ↳ Mailable templates used by listeners
+├── Exceptions/             # Custom exception classes
 ├── Http/
 │   ├── Controllers/        # API Controllers
-│   ├── Requests/          # Request Validation
-│   └── Responses/         # Response Objects
-├── Models/                # Eloquent Models
-├── Repositories/          # Data Access Layer
-├── Services/              # Business Logic Layer
-└── Transformers/          # Response Transformation
+│   ├── Middleware/         # Auth & admin middleware
+│   ├── Requests/           # Request Validation
+│   └── Responses/          # Response Objects
+├── Models/                 # Eloquent Models
+├── Providers/              # Service Providers
+├── Repositories/           # Data Access Layer
+├── Services/               # Business Logic Layer
+└── Transformers/           # Response Transformation
 
-docs/                      # Complete Documentation
-tests/                     # Feature & Unit Tests
-routes/api.php            # API Routes
+config/                     # Application configuration
+
+database/
+├── factories/              # Model factories
+├── migrations/             # Database migrations
+└── seeders/                # Database seeders
+
+docker/                     # Docker configuration (Nginx, PHP)
+docs/                       # Complete documentation
+routes/api.php              # API route definitions
+
+tests/
+├── DataProviders/          # Shared test data providers
+├── E2E/                    # End-to-end tests
+├── Feature/                # Feature tests
+├── Fixtures/               # Test fixtures
+├── Performance/            # Performance tests
+├── Security/               # Security tests
+├── Traits/                 # Shared test traits
+└── Unit/                   # Unit tests
 ```
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Write/update tests
-5. Submit a pull request
 
 ## 📄 License
 
 This project is open-sourced software licensed under the [Apache 2.0 license](https://www.apache.org/licenses/LICENSE-2.0).
-
-## 📞 Support
-
-For detailed documentation, see the `docs/` directory.
-For API usage, see `docs/API_DOCUMENTATION.md`.
-For development, see `docs/SETUP_AND_DEVELOPMENT.md`.
