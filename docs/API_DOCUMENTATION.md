@@ -13,6 +13,8 @@
 10. [Pagination](#pagination)
 11. [Filtering](#filtering)
 12. [Sorting](#sorting)
+13. [Rate Limiting](#rate-limiting)
+14. [Webhook Endpoints](#webhook-endpoints)
 
 ---
 
@@ -290,48 +292,6 @@ GET /api/v1/products/search?q=laptop&filter[min_price]=500&sort=price&order=asc
     "last_page": 1
   },
   "message": "Search results"
-}
-```
-
-**Status Code:** `200 OK`
-order=asc|desc                      (optional, default: asc)
-filter[name]=text                   (optional, substring search on name)
-filter[search]=text                 (optional, substring search on name OR description)
-filter[category_id]=1               (optional, exact match)
-filter[category_ids]=1,3,7          (optional, OR match across multiple categories)
-filter[min_price]=100               (optional, numeric)
-filter[max_price]=1000              (optional, numeric)
-filter[min_quantity]=5              (optional, integer)
-filter[max_quantity]=100            (optional, integer)
-include=category                    (optional, load related)
-```
-
-**Example Request:**
-```bash
-GET /api/v1/products?filter[category_id]=1&filter[min_price]=100&sort=price&order=asc&page=1&per_page=10
-```
-
-**Example Response:**
-```json
-{
-  "success": true,
-  "data": [
-    {
-      "id": 1,
-      "name": "Gaming Laptop",
-      "price": 1299.99,
-      "quantity": 5,
-      "description": "High-performance laptop",
-      "category_id": 1
-    }
-  ],
-  "meta": {
-    "current_page": 1,
-    "per_page": 10,
-    "total": 25,
-    "last_page": 3
-  },
-  "message": "Products found"
 }
 ```
 
@@ -681,17 +641,7 @@ POST /api/v1/orders
 - `items.*.quantity` — Required, integer, min: 1, max: 10000
 - `items.*.unit_price` — Required, numeric, min: 0
 
-**Inventory side-effect:**
-
-Placing an order **atomically deducts stock** for every item inside a single database transaction:
-
-1. Each product row is locked with `SELECT … FOR UPDATE` to prevent overselling under concurrent requests.
-2. Available stock is validated against the requested quantity.
-3. The product `quantity` column is decremented.
-4. An `inventory_history` record with `change_type = sale` is written.
-5. The order and its items are inserted.
-
-If any product has insufficient stock the entire transaction is rolled back and no order is created.
+**Inventory:** Placing an order atomically deducts stock using pessimistic locking. If any product has insufficient stock, the entire transaction is rolled back. See [ARCHITECTURE.md — Order Placement & Inventory](./ARCHITECTURE.md#order-placement--inventory) for details.
 
 **Status Code:** `201 Created`
 
@@ -717,26 +667,13 @@ PUT /api/v1/orders/{id}
 
 #### Status Machine
 
-All status updates — user and admin alike — are validated by `OrderStatusMachine`.
+All status transitions are validated by `OrderStatusMachine`. See [ARCHITECTURE.md — Order Status Machine](./ARCHITECTURE.md#order-status-machine) for the full lifecycle diagram and rules.
 
-**Regular users** may only perform:
+**Regular users** may only cancel within 24 hours of creation (from `pending`, `payment_failed`, or `paid`).
 
-| From | To | Extra condition |
-|------|----|-----------------|
-| `pending` | `cancelled` | Must be within **24 hours** of order creation |
+**Admins** may perform any valid lifecycle transition. `cancelled` and `refunded` are terminal states.
 
-**Admins** may perform any transition in the full lifecycle:
-
-| From | To |
-|------|----|
-| `pending` | `paid`, `cancelled` |
-| `paid` | `shipped`, `refunded` |
-| `shipped` | `delivered` |
-| `delivered` | `refunded` |
-| `cancelled` | *(terminal)* |
-| `refunded` | *(terminal)* |
-
-Attempting an invalid transition (including skipping steps or moving out of a terminal status) throws `InvalidOrderStateException` → `400 Bad Request` for both roles.
+Invalid transitions throw `InvalidOrderStateException` → `400 Bad Request`.
 
 **Request Body:**
 ```json
@@ -1472,80 +1409,5 @@ POST /api/v1/webhooks/shipping
 
 ---
 
-## Common API Workflows
-
-### Get Products in a Category
-
-```bash
-# Get products in Electronics category (id=1), sorted by price
-GET /api/v1/products?filter[category_id]=1&sort=price&order=asc
-```
-
-### Browse Category Hierarchy
-
-```bash
-# Get root categories
-GET /api/v1/categories?filter[parent_id]=null
-
-# Get subcategories
-GET /api/v1/categories?filter[parent_id]=1
-```
-
-### Search Products
-
-```bash
-# Search for laptops in a price range
-GET /api/v1/products?filter[name]=laptop&filter[min_price]=500&filter[max_price]=2000
-
-# Dedicated search endpoint (searches name AND description)
-GET /api/v1/products/search?q=gaming+laptop&filter[min_price]=500&sort=price&order=asc
-```
-
-### View Recent Orders
-
-```bash
-# Get most recent orders
-GET /api/v1/orders?sort=created_at&order=desc&page=1&per_page=10
-```
-
-### Apply a Coupon to an Order
-
-```bash
-# Validate coupon and preview discount
-POST /api/v1/coupons/apply
-{
-  "code": "SAVE20",
-  "order_total": 150.00
-}
-```
-
-### Request a Return
-
-```bash
-# Create a return request for an order
-POST /api/v1/return-requests
-{
-  "order_id": 42,
-  "reason": "Product arrived damaged"
-}
-```
-
-### Admin: Manage Return Requests
-
-```bash
-# List pending return requests
-GET /api/v1/return-requests?filter[status]=pending
-
-# Approve a return request
-POST /api/v1/return-requests/1/approve
-{
-  "admin_notes": "Approved — refund issued"
-}
-```
-
-
----
-
-This documentation covers all endpoints, parameters, and examples. For more details on specific resources, refer to the individual resource documentation files.
 
 

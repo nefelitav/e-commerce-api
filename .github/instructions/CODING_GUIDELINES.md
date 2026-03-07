@@ -217,9 +217,6 @@ Use parameters in SQL queries to prevent SQL injection.
 ### Comments Usage
 Add comments only to explain complex or non-obvious code. If the code needs comments, it's likely not good enough.
 
-### API Documentation
-Add clear documentation to Swagger for easy API understanding.
-
 ### Development Console
 Always check the browser console for errors during development.
 

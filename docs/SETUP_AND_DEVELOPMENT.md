@@ -2,96 +2,43 @@
 
 ## Table of Contents
 1. [Prerequisites](#prerequisites)
-2. [Installation](#installation)
-3. [Development Workflow](#development-workflow)
-4. [Testing](#testing)
-5. [Database Management](#database-management)
-6. [Debugging](#debugging)
-7. [Code Standards](#code-standards)
-8. [Common Tasks](#common-tasks)
+2. [Local Installation](#local-installation)
+3. [Docker Development Setup](#docker-development-setup)
+4. [Development Workflow](#development-workflow)
+5. [Testing](#testing)
+6. [Database Management](#database-management)
+7. [Debugging](#debugging)
+8. [Code Standards](#code-standards)
+9. [Environment Configuration](#environment-configuration)
+10. [Deployment Checklist](#deployment-checklist)
 
 ---
 
 ## Prerequisites
 
-### Required
-- **PHP 8.2+** - Get from [php.net](https://www.php.net/downloads)
-- **Composer** - Get from [getcomposer.org](https://getcomposer.org)
-- **Node.js 18+** - Get from [nodejs.org](https://nodejs.org)
-- **Git** - Get from [git-scm.com](https://git-scm.com)
+- **PHP 8.2+**, **Composer 2.x**, **Node.js 18+**, **npm 9+**
+- **Docker** (optional — for containerised setup)
 
-### Optional
-- **SQLite UI** - [DB Browser for SQLite](https://sqlitebrowser.org/)
-- **API Client** - [Postman](https://www.postman.com/) or [Insomnia](https://insomnia.rest/)
-- **Code Editor** - [VS Code](https://code.visualstudio.com/) with Laravel extensions
-
-### Verify Installation
+Verify:
 ```bash
-php --version      # Should be 8.2+
-composer --version # Should be 2.x
-node --version     # Should be 18+
-npm --version      # Should be 9+
+php --version && composer --version && node --version && npm --version
 ```
 
 ---
 
-## Installation
+## Local Installation
 
-### 1. Clone Repository
+> For a quick copy-paste start, see the [README](../README.md#-quick-start).
+
 ```bash
-git clone <repository-url>
-cd shop-api
-```
-
-### 2. Install PHP Dependencies
-```bash
-composer install
-```
-
-> **Note:** This also installs git hooks automatically (pre-commit hook for code style and static analysis).
-
-### 3. Copy Environment Configuration
-```bash
+git clone <repository-url> && cd shop-api
+composer install          # also installs pre-commit git hooks
 cp .env.example .env
-```
-
-### 4. Generate Application Key
-```bash
 php artisan key:generate
-```
-
-### 5. Create SQLite Database
-```bash
 touch database/database.sqlite
-```
-
-### 6. Run Migrations
-```bash
 php artisan migrate
-```
-
-### 7. Seed Database (Optional)
-```bash
-php artisan db:seed
-```
-
-### 8. Install Node Dependencies
-```bash
-npm install
-```
-
-### 9. Build Assets
-```bash
-npm run build
-```
-
-### 10. Generate API Documentation
-```bash
-php artisan l5-swagger:generate
-```
-
-### 11. Start Development Server
-```bash
+php artisan db:seed       # optional
+npm install && npm run build
 php artisan serve
 ```
 
@@ -588,171 +535,15 @@ php artisan ide-helper:models
 
 ---
 
-## Common Tasks
+## Troubleshooting
 
-### Add New Product
+**"Connection refused"** → ensure `php artisan serve` is running; check `lsof -i :8000`.
 
-**Via API:**
-```bash
-curl -X POST http://localhost:8000/api/v1/products \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "New Product",
-    "description": "Product description",
-    "price": 99.99,
-    "quantity": 10,
-    "category_id": 1
-  }'
-```
+**"Database locked"** → `php artisan cache:clear` then `php artisan migrate:refresh`.
 
-**Via Tinker:**
-```bash
-php artisan tinker
->>> $product = App\Models\Product\ProductModel::create([
-    'name' => 'New Product',
-    'description' => 'Description',
-    'price' => 99.99,
-    'quantity' => 10,
-    'category_id' => 1
-]);
-```
+**"Class not found"** → `composer dump-autoload` and `php artisan ide-helper:generate`.
 
-### Reset Database
-
-```bash
-php artisan migrate:refresh --seed
-```
-
-### Export Database
-
-```bash
-sqlite3 database/database.sqlite .dump > database_backup.sql
-```
-
-### Import Database
-
-```bash
-sqlite3 database/database.sqlite < database_backup.sql
-```
-
-### Generate API Docs
-
-```bash
-php artisan l5-swagger:generate
-```
-
-### Access Swagger UI
-
-```
-http://localhost:8000/api/documentation
-```
-
-### Monitor Requests
-
-```bash
-# Terminal 1: Start server
-php artisan serve
-
-# Terminal 2: Monitor logs
-php artisan pail
-
-# Terminal 3: Run tests
-php artisan test
-```
-
-### Troubleshooting
-
-**"Connection refused" error**
-```bash
-# Make sure server is running
-php artisan serve
-
-# Check port 8000 is not in use
-lsof -i :8000
-```
-
-**"Database locked" error**
-```bash
-# Clear all cache
-php artisan cache:clear
-
-# Reset database
-php artisan migrate:refresh
-```
-
-**"Class not found" error**
-```bash
-# Regenerate autoloader
-composer dump-autoload
-
-# Generate IDE helper
-php artisan ide-helper:generate
-```
-
-**Tests failing**
-```bash
-# Make sure database is set up
-php artisan migrate --env=testing
-
-# Run tests
-php artisan test
-```
-
----
-
-## Performance Tips
-
-### Optimization
-
-1. **Add Indexes**
-   ```php
-   // In migration
-   Schema::table('products', function (Blueprint $table) {
-       $table->index('category_id');
-       $table->index('price');
-   });
-   ```
-
-2. **Use Select Carefully**
-   ```php
-   // Don't select all columns if not needed
-   ProductModel::select('id', 'name', 'price')->get();
-   ```
-
-3. **Eager Load Relationships**
-   ```php
-   // Good
-   ProductModel::with('category')->get();
-   
-   // Avoid
-   $products = ProductModel::all();
-   foreach ($products as $product) {
-       echo $product->category->name; // N+1 query
-   }
-   ```
-
-4. **Cache Results**
-   ```php
-   $products = cache()->remember('products', now()->addHours(1), function () {
-       return ProductModel::all();
-   });
-   ```
-
-### Monitoring
-
-```bash
-# Check query count
-php artisan pail
-
-# Monitor database
-sqlite3 database/database.sqlite ".open"
-
-# Profile specific request
-php artisan tinker
->>> App\Models\Product\ProductModel::enableQueryLog();
->>> // Run your code
->>> dd(DB::getQueryLog());
-```
+**Tests failing** → `php artisan migrate --env=testing` then `php artisan test`.
 
 ---
 
@@ -817,7 +608,6 @@ CACHE_STORE=redis
 - [ ] Cache configuration: `php artisan config:cache`
 - [ ] Cache routes: `php artisan route:cache`
 - [ ] Cache views: `php artisan view:cache`
-- [ ] Generate API docs: `php artisan l5-swagger:generate`
 - [ ] Run tests: `php artisan test`
 - [ ] Set proper file permissions
 - [ ] Set up error logging
@@ -825,5 +615,4 @@ CACHE_STORE=redis
 
 ---
 
-This guide covers all aspects of development. For API-specific details, see [API_DOCUMENTATION.md](./API_DOCUMENTATION.md). For architecture details, see [ARCHITECTURE.md](./ARCHITECTURE.md).
 
