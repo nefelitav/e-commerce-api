@@ -2,6 +2,7 @@
 
 namespace Tests\Security;
 
+use App\Enums\OrderStatus;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\DataProviderExternal;
 use Symfony\Component\HttpFoundation\Response;
@@ -212,7 +213,7 @@ class InputValidationTest extends TestCase
         $this->actingAs($user);
 
         $this->postJson(route('v1.orders.store'), [
-            'status' => 'pending',
+            'status' => OrderStatus::Pending->value,
             'total_price' => 100,
             'items' => [
                 ['product_id' => 99999, 'quantity' => 1, 'unit_price' => 100],
@@ -229,7 +230,7 @@ class InputValidationTest extends TestCase
         $product = CatalogFixture::productWithStock(10);
 
         $this->postJson(route('v1.orders.store'), [
-            'status' => 'pending',
+            'status' => OrderStatus::Pending->value,
             'total_price' => 0,
             'items' => [
                 ['product_id' => $product->id, 'quantity' => 0, 'unit_price' => 10],
@@ -246,7 +247,7 @@ class InputValidationTest extends TestCase
         $product = CatalogFixture::productWithStock(10);
 
         $this->postJson(route('v1.orders.store'), [
-            'status' => 'pending',
+            'status' => OrderStatus::Pending->value,
             'total_price' => 0,
             'items' => [
                 ['product_id' => $product->id, 'quantity' => -5, 'unit_price' => 10],
@@ -263,7 +264,7 @@ class InputValidationTest extends TestCase
         $product = CatalogFixture::productWithStock(10);
 
         $this->postJson(route('v1.orders.store'), [
-            'status' => 'pending',
+            'status' => OrderStatus::Pending->value,
             'total_price' => 100000,
             'items' => [
                 ['product_id' => $product->id, 'quantity' => 10001, 'unit_price' => 10],
@@ -300,7 +301,7 @@ class InputValidationTest extends TestCase
         $this->actingAs($user);
 
         $this->postJson(route('v1.orders.store'), [
-            'status' => 'pending',
+            'status' => OrderStatus::Pending->value,
             'total_price' => 10,
             'items' => [],
         ])->assertStatus(Response::HTTP_UNPROCESSABLE_ENTITY)

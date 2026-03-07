@@ -2,6 +2,7 @@
 
 namespace Tests\E2E;
 
+use App\Enums\InventoryChangeType;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Symfony\Component\HttpFoundation\Response;
 use Tests\Fixtures\CatalogFixture;
@@ -101,7 +102,7 @@ class ProductCatalogManagementTest extends TestCase
 
         $this->assertDatabaseHas('inventory_history', [
             'product_id' => $productId,
-            'change_type' => 'sale',
+            'change_type' => InventoryChangeType::Sale->value,
             'quantity_changed' => -2,
         ]);
     }

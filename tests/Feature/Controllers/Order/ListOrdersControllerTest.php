@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Controllers\Order;
 
+use App\Enums\OrderStatus;
 use App\Models\Order\OrderModel;
 use App\Models\UserModel;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -102,17 +103,17 @@ class ListOrdersControllerTest extends TestCase
         $admin = UserModel::factory()->admin()->create();
         $this->actingAs($admin);
 
-        OrderModel::factory()->create(['status' => 'pending']);
-        OrderModel::factory()->create(['status' => 'paid']);
-        OrderModel::factory()->create(['status' => 'shipped']);
+        OrderModel::factory()->create(['status' => OrderStatus::Pending->value]);
+        OrderModel::factory()->create(['status' => OrderStatus::Paid->value]);
+        OrderModel::factory()->create(['status' => OrderStatus::Shipped->value]);
 
         $response = $this->getJson(route('v1.orders.index', [
-            'filter' => ['status' => 'pending'],
+            'filter' => ['status' => OrderStatus::Pending->value],
         ]));
 
         $response->assertStatus(Response::HTTP_OK);
         $this->assertEquals(1, $response->json('meta.total'));
-        $this->assertEquals('pending', $response->json('data.0.status'));
+        $this->assertEquals(OrderStatus::Pending->value, $response->json('data.0.status'));
     }
 
     public function test_filter_by_multiple_statuses(): void
@@ -120,22 +121,22 @@ class ListOrdersControllerTest extends TestCase
         $admin = UserModel::factory()->admin()->create();
         $this->actingAs($admin);
 
-        OrderModel::factory()->create(['status' => 'pending']);
-        OrderModel::factory()->create(['status' => 'paid']);
-        OrderModel::factory()->create(['status' => 'shipped']);
-        OrderModel::factory()->create(['status' => 'delivered']);
+        OrderModel::factory()->create(['status' => OrderStatus::Pending->value]);
+        OrderModel::factory()->create(['status' => OrderStatus::Paid->value]);
+        OrderModel::factory()->create(['status' => OrderStatus::Shipped->value]);
+        OrderModel::factory()->create(['status' => OrderStatus::Delivered->value]);
 
         $response = $this->getJson(route('v1.orders.index', [
-            'filter' => ['status' => 'pending,paid'],
+            'filter' => ['status' => OrderStatus::Pending->value.','.OrderStatus::Paid->value],
         ]));
 
         $response->assertStatus(Response::HTTP_OK);
         $this->assertEquals(2, $response->json('meta.total'));
 
         $statuses = array_column($response->json('data'), 'status');
-        $this->assertContains('pending', $statuses);
-        $this->assertContains('paid', $statuses);
-        $this->assertNotContains('shipped', $statuses);
+        $this->assertContains(OrderStatus::Pending->value, $statuses);
+        $this->assertContains(OrderStatus::Paid->value, $statuses);
+        $this->assertNotContains(OrderStatus::Shipped->value, $statuses);
     }
 
     public function test_filter_by_multiple_statuses_validation_rejects_invalid(): void
@@ -144,10 +145,9 @@ class ListOrdersControllerTest extends TestCase
         $this->actingAs($admin);
 
         $response = $this->getJson(route('v1.orders.index', [
-            'filter' => ['status' => 'pending,invalid_status'],
+            'filter' => ['status' => OrderStatus::Pending->value.',invalid_status'],
         ]));
 
         $response->assertStatus(Response::HTTP_UNPROCESSABLE_ENTITY);
     }
 }
-

@@ -17,5 +17,9 @@ interface OrderStatusMachineInterface
      * @throws InvalidOrderStateException
      */
     public function assertAdminTransitionAllowed(Order $existing, OrderStatus $newStatus): void;
-}
 
+    /**
+     * @throws InvalidOrderStateException
+     */
+    public function assertWebhookTransitionAllowed(Order $existing, OrderStatus $newStatus): void;
+}

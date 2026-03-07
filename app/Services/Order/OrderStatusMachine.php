@@ -16,16 +16,32 @@ final readonly class OrderStatusMachine implements OrderStatusMachineInterface
      */
     private const USER_ALLOWED_TRANSITIONS = [
         OrderStatus::Pending->value => [OrderStatus::Cancelled],
+        OrderStatus::PaymentFailed->value => [OrderStatus::Cancelled],
+        OrderStatus::Paid->value => [OrderStatus::Cancelled],
     ];
 
     /**
      * @var array<string, list<OrderStatus>>
      */
     private const ADMIN_ALLOWED_TRANSITIONS = [
-        OrderStatus::Pending->value   => [OrderStatus::Paid, OrderStatus::Cancelled],
-        OrderStatus::Paid->value      => [OrderStatus::Shipped, OrderStatus::Refunded],
-        OrderStatus::Shipped->value   => [OrderStatus::Delivered],
+        OrderStatus::Pending->value => [OrderStatus::Paid, OrderStatus::Cancelled],
+        OrderStatus::PaymentFailed->value => [OrderStatus::Paid, OrderStatus::Cancelled],
+        OrderStatus::Paid->value => [OrderStatus::Processing, OrderStatus::Refunded, OrderStatus::Cancelled],
+        OrderStatus::Processing->value => [OrderStatus::Shipped, OrderStatus::Cancelled],
+        OrderStatus::Shipped->value => [OrderStatus::Delivered],
         OrderStatus::Delivered->value => [OrderStatus::Refunded],
+    ];
+
+    /**
+     * Transitions that external systems (payment provider, shipping carrier) can trigger via webhooks.
+     *
+     * @var array<string, list<OrderStatus>>
+     */
+    private const WEBHOOK_ALLOWED_TRANSITIONS = [
+        OrderStatus::Pending->value => [OrderStatus::Paid, OrderStatus::PaymentFailed],
+        OrderStatus::PaymentFailed->value => [OrderStatus::Paid],
+        OrderStatus::Processing->value => [OrderStatus::Shipped],
+        OrderStatus::Shipped->value => [OrderStatus::Delivered],
     ];
 
     /**
@@ -35,14 +51,12 @@ final readonly class OrderStatusMachine implements OrderStatusMachineInterface
     {
         $allowed = self::USER_ALLOWED_TRANSITIONS[$existing->status->value] ?? [];
 
-        if (!in_array($newStatus, $allowed, strict: true)) {
+        if (! in_array($newStatus, $allowed, strict: true)) {
             throw new InvalidOrderStateException(
-                "Transition from '{$existing->status->value}' to '{$newStatus->value}' is not allowed."
+                "Transition from '{$existing->status->value}' to '{$newStatus->value}' is not allowed.",
             );
         }
 
-        // After the guard above, the only reachable status is Cancelled.
-        // Call the cancellation-window check directly to keep PHPStan happy.
         $this->assertWithinCancellationWindow($existing);
     }
 
@@ -55,7 +69,7 @@ final readonly class OrderStatusMachine implements OrderStatusMachineInterface
 
         if ($hoursElapsed >= self::CANCELLATION_WINDOW_HOURS) {
             throw new InvalidOrderStateException(
-                'Orders can only be cancelled within ' . self::CANCELLATION_WINDOW_HOURS . ' hours of creation.'
+                'Orders can only be cancelled within '.self::CANCELLATION_WINDOW_HOURS.' hours of creation.',
             );
         }
     }
@@ -67,9 +81,23 @@ final readonly class OrderStatusMachine implements OrderStatusMachineInterface
     {
         $allowed = self::ADMIN_ALLOWED_TRANSITIONS[$existing->status->value] ?? [];
 
-        if (!in_array($newStatus, $allowed, strict: true)) {
+        if (! in_array($newStatus, $allowed, strict: true)) {
             throw new InvalidOrderStateException(
-                "Transition from '{$existing->status->value}' to '{$newStatus->value}' is not allowed."
+                "Transition from '{$existing->status->value}' to '{$newStatus->value}' is not allowed.",
+            );
+        }
+    }
+
+    /**
+     * @throws InvalidOrderStateException
+     */
+    public function assertWebhookTransitionAllowed(Order $existing, OrderStatus $newStatus): void
+    {
+        $allowed = self::WEBHOOK_ALLOWED_TRANSITIONS[$existing->status->value] ?? [];
+
+        if (! in_array($newStatus, $allowed, strict: true)) {
+            throw new InvalidOrderStateException(
+                "Webhook transition from '{$existing->status->value}' to '{$newStatus->value}' is not allowed.",
             );
         }
     }

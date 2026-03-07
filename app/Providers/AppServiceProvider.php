@@ -7,12 +7,16 @@ use App\CQRS\Commands\Order\CreateOrderCommand;
 use App\CQRS\Commands\Product\CreateProductCommand;
 use App\CQRS\Handlers\Order\CreateOrderCommandHandler;
 use App\CQRS\Handlers\Product\CreateProductCommandHandler;
+use App\Events\OrderCancelledEvent;
 use App\Events\OrderCreatedEvent;
+use App\Events\OrderDeliveredEvent;
 use App\Events\OrderPaidEvent;
 use App\Events\OrderShippedEvent;
 use App\Http\Middleware\RequireAdmin;
 use App\Http\Middleware\RequireAuth;
+use App\Listeners\SendOrderCancelledEmail;
 use App\Listeners\SendOrderConfirmationEmail;
+use App\Listeners\SendOrderDeliveredEmail;
 use App\Listeners\SendOrderPaidEmail;
 use App\Listeners\SendOrderPaidWebhook;
 use App\Listeners\SendOrderShippedEmail;
@@ -88,6 +92,8 @@ class AppServiceProvider extends ServiceProvider
         Event::listen(OrderPaidEvent::class, SendOrderPaidWebhook::class);
         Event::listen(OrderPaidEvent::class, SendOrderPaidEmail::class);
         Event::listen(OrderShippedEvent::class, SendOrderShippedEmail::class);
+        Event::listen(OrderDeliveredEvent::class, SendOrderDeliveredEmail::class);
+        Event::listen(OrderCancelledEvent::class, SendOrderCancelledEmail::class);
 
         /** @var Router $router */
         $router = $this->app->make(Router::class);

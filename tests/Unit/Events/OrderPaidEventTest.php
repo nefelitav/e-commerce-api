@@ -31,7 +31,7 @@ class OrderPaidEventTest extends TestCase
         $this->assertEquals('2026-03-04T10:30:00+00:00', $payload['occurred_at']);
         $this->assertEquals(42, $payload['data']['order_id']);
         $this->assertEquals(7, $payload['data']['user_id']);
-        $this->assertEquals('paid', $payload['data']['status']);
+        $this->assertEquals(OrderStatus::Paid->value, $payload['data']['status']);
         $this->assertEquals(299.99, $payload['data']['total_price']);
         $this->assertCount(2, $payload['data']['items']);
         $this->assertEquals(10, $payload['data']['items'][0]['product_id']);
@@ -56,4 +56,3 @@ class OrderPaidEventTest extends TestCase
         $this->assertEmpty($payload['data']['items']);
     }
 }
-

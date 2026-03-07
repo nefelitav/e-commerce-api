@@ -2,6 +2,7 @@
 
 namespace Tests\E2E;
 
+use App\Enums\OrderStatus;
 use App\Events\OrderCreatedEvent;
 use App\Events\OrderPaidEvent;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -35,19 +36,19 @@ class PaymentWebhookFlowTest extends TestCase
         $orderId = $orderResponse->json('data.id');
 
         Event::assertDispatched(OrderCreatedEvent::class);
-        $this->assertDatabaseHas('orders', ['id' => $orderId, 'status' => 'pending']);
+        $this->assertDatabaseHas('orders', ['id' => $orderId, 'status' => OrderStatus::Pending->value]);
 
         $this->payOrderViaWebhook($orderId, 'pay_webhook_test_001')
             ->assertStatus(Response::HTTP_OK)
-            ->assertJsonFragment(['status' => 'paid']);
+            ->assertJsonFragment(['status' => OrderStatus::Paid->value]);
 
         Event::assertDispatched(OrderPaidEvent::class);
-        $this->assertDatabaseHas('orders', ['id' => $orderId, 'status' => 'paid']);
+        $this->assertDatabaseHas('orders', ['id' => $orderId, 'status' => OrderStatus::Paid->value]);
 
         $this->actingAs($customer);
         $this->getJson(route('v1.orders.show', $orderId))
             ->assertStatus(Response::HTTP_OK)
-            ->assertJsonFragment(['status' => 'paid']);
+            ->assertJsonFragment(['status' => OrderStatus::Paid->value]);
     }
 
     /**
@@ -63,7 +64,7 @@ class PaymentWebhookFlowTest extends TestCase
         $this->payOrderViaSignedWebhook($orderId, $secret, 'pay_signed_001')
             ->assertStatus(Response::HTTP_OK);
 
-        $this->assertDatabaseHas('orders', ['id' => $orderId, 'status' => 'paid']);
+        $this->assertDatabaseHas('orders', ['id' => $orderId, 'status' => OrderStatus::Paid->value]);
     }
 
     public function test_webhook_rejects_invalid_signature(): void
@@ -78,7 +79,7 @@ class PaymentWebhookFlowTest extends TestCase
             ['X-Webhook-Signature' => 'invalid-signature'],
         )->assertStatus(Response::HTTP_FORBIDDEN);
 
-        $this->assertDatabaseHas('orders', ['id' => $orderId, 'status' => 'pending']);
+        $this->assertDatabaseHas('orders', ['id' => $orderId, 'status' => OrderStatus::Pending->value]);
     }
 
     public function test_double_payment_webhook_is_rejected(): void
@@ -91,6 +92,6 @@ class PaymentWebhookFlowTest extends TestCase
         $this->payOrderViaWebhook($orderId, 'pay_double_001')
             ->assertStatus(Response::HTTP_BAD_REQUEST);
 
-        $this->assertDatabaseHas('orders', ['id' => $orderId, 'status' => 'paid']);
+        $this->assertDatabaseHas('orders', ['id' => $orderId, 'status' => OrderStatus::Paid->value]);
     }
 }

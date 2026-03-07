@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Controllers\Webhook;
 
+use App\Enums\OrderStatus;
 use App\Events\OrderPaidEvent;
 use App\Models\Order\OrderModel;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -17,20 +18,20 @@ class PaymentWebhookControllerTest extends TestCase
     {
         Event::fake([OrderPaidEvent::class]);
 
-        $order = OrderModel::factory()->create(['status' => 'pending']);
+        $order = OrderModel::factory()->create(['status' => OrderStatus::Pending->value]);
 
         $response = $this->postJson(route('v1.webhooks.payments'), [
             'order_id' => $order->id,
             'payment_reference' => 'pay_abc123',
-            'status' => 'paid',
+            'status' => OrderStatus::Paid->value,
         ]);
 
         $response->assertStatus(Response::HTTP_OK)
-            ->assertJsonFragment(['status' => 'paid']);
+            ->assertJsonFragment(['status' => OrderStatus::Paid->value]);
 
         $this->assertDatabaseHas('orders', [
             'id' => $order->id,
-            'status' => 'paid',
+            'status' => OrderStatus::Paid->value,
         ]);
 
         Event::assertDispatched(OrderPaidEvent::class);
@@ -38,19 +39,19 @@ class PaymentWebhookControllerTest extends TestCase
 
     public function test_payment_webhook_rejects_non_pending_order(): void
     {
-        $order = OrderModel::factory()->create(['status' => 'shipped']);
+        $order = OrderModel::factory()->create(['status' => OrderStatus::Shipped->value]);
 
         $response = $this->postJson(route('v1.webhooks.payments'), [
             'order_id' => $order->id,
             'payment_reference' => 'pay_abc123',
-            'status' => 'paid',
+            'status' => OrderStatus::Paid->value,
         ]);
 
         $response->assertStatus(Response::HTTP_BAD_REQUEST);
 
         $this->assertDatabaseHas('orders', [
             'id' => $order->id,
-            'status' => 'shipped',
+            'status' => OrderStatus::Shipped->value,
         ]);
     }
 
@@ -59,7 +60,7 @@ class PaymentWebhookControllerTest extends TestCase
         $response = $this->postJson(route('v1.webhooks.payments'), [
             'order_id' => 99999,
             'payment_reference' => 'pay_abc123',
-            'status' => 'paid',
+            'status' => OrderStatus::Paid->value,
         ]);
 
         $response->assertStatus(Response::HTTP_UNPROCESSABLE_ENTITY);
@@ -74,12 +75,12 @@ class PaymentWebhookControllerTest extends TestCase
 
     public function test_payment_webhook_rejects_invalid_status(): void
     {
-        $order = OrderModel::factory()->create(['status' => 'pending']);
+        $order = OrderModel::factory()->create(['status' => OrderStatus::Pending->value]);
 
         $response = $this->postJson(route('v1.webhooks.payments'), [
             'order_id' => $order->id,
             'payment_reference' => 'pay_abc123',
-            'status' => 'shipped',
+            'status' => OrderStatus::Shipped->value,
         ]);
 
         $response->assertStatus(Response::HTTP_UNPROCESSABLE_ENTITY);
@@ -87,12 +88,12 @@ class PaymentWebhookControllerTest extends TestCase
 
     public function test_payment_webhook_is_idempotent_for_already_paid_order(): void
     {
-        $order = OrderModel::factory()->create(['status' => 'paid']);
+        $order = OrderModel::factory()->create(['status' => OrderStatus::Paid->value]);
 
         $response = $this->postJson(route('v1.webhooks.payments'), [
             'order_id' => $order->id,
             'payment_reference' => 'pay_abc123',
-            'status' => 'paid',
+            'status' => OrderStatus::Paid->value,
         ]);
 
         $response->assertStatus(Response::HTTP_BAD_REQUEST);
@@ -102,12 +103,12 @@ class PaymentWebhookControllerTest extends TestCase
     {
         Event::fake([OrderPaidEvent::class]);
 
-        $order = OrderModel::factory()->create(['status' => 'pending']);
+        $order = OrderModel::factory()->create(['status' => OrderStatus::Pending->value]);
 
         $response = $this->postJson(route('v1.webhooks.payments'), [
             'order_id' => $order->id,
             'payment_reference' => 'pay_xyz789',
-            'status' => 'paid',
+            'status' => OrderStatus::Paid->value,
         ]);
 
         $response->assertStatus(Response::HTTP_OK);
@@ -117,12 +118,12 @@ class PaymentWebhookControllerTest extends TestCase
     {
         config(['webhooks.signing_secret' => 'test-secret-key']);
 
-        $order = OrderModel::factory()->create(['status' => 'pending']);
+        $order = OrderModel::factory()->create(['status' => OrderStatus::Pending->value]);
 
         $response = $this->postJson(route('v1.webhooks.payments'), [
             'order_id' => $order->id,
             'payment_reference' => 'pay_abc123',
-            'status' => 'paid',
+            'status' => OrderStatus::Paid->value,
         ]);
 
         $response->assertStatus(Response::HTTP_FORBIDDEN);
@@ -132,14 +133,14 @@ class PaymentWebhookControllerTest extends TestCase
     {
         config(['webhooks.signing_secret' => 'test-secret-key']);
 
-        $order = OrderModel::factory()->create(['status' => 'pending']);
+        $order = OrderModel::factory()->create(['status' => OrderStatus::Pending->value]);
 
         $response = $this->postJson(
             route('v1.webhooks.payments'),
             [
                 'order_id' => $order->id,
                 'payment_reference' => 'pay_abc123',
-                'status' => 'paid',
+                'status' => OrderStatus::Paid->value,
             ],
             ['X-Webhook-Signature' => 'invalid-signature'],
         );
@@ -154,12 +155,12 @@ class PaymentWebhookControllerTest extends TestCase
         $secret = 'test-secret-key';
         config(['webhooks.signing_secret' => $secret]);
 
-        $order = OrderModel::factory()->create(['status' => 'pending']);
+        $order = OrderModel::factory()->create(['status' => OrderStatus::Pending->value]);
 
         $payload = [
             'order_id' => $order->id,
             'payment_reference' => 'pay_signed123',
-            'status' => 'paid',
+            'status' => OrderStatus::Paid->value,
         ];
 
         $signature = hash_hmac('sha256', (string) json_encode($payload), $secret);
@@ -173,8 +174,7 @@ class PaymentWebhookControllerTest extends TestCase
         $response->assertStatus(Response::HTTP_OK);
         $this->assertDatabaseHas('orders', [
             'id' => $order->id,
-            'status' => 'paid',
+            'status' => OrderStatus::Paid->value,
         ]);
     }
 }
-

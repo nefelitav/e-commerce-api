@@ -24,7 +24,7 @@ class OrderRepositoryTest extends TestCase
     {
         parent::setUp();
 
-        $this->repository = new OrderRepository();
+        $this->repository = new OrderRepository;
     }
 
     public function test_it_returns_all_orders(): void
@@ -36,7 +36,7 @@ class OrderRepositoryTest extends TestCase
         $this->assertCount(3, $orders);
         $this->assertEquals(
             OrderModel::query()->first()->status,
-            $orders[0]->status
+            $orders[0]->status,
         );
     }
 
@@ -85,7 +85,7 @@ class OrderRepositoryTest extends TestCase
         $this->assertDatabaseHas('orders', [
             'id' => $result->id,
             'user_id' => $user->id,
-            'status' => 'pending',
+            'status' => OrderStatus::Pending->value,
             'total_price' => 1999,
         ]);
 
@@ -102,7 +102,7 @@ class OrderRepositoryTest extends TestCase
         $user = UserModel::factory()->create();
         $order = OrderModel::factory()->create([
             'user_id' => $user->id,
-            'status' => 'pending',
+            'status' => OrderStatus::Pending->value,
             'total_price' => 100,
         ]);
 
@@ -132,7 +132,7 @@ class OrderRepositoryTest extends TestCase
         $this->assertEquals(OrderStatus::Paid, $result->status);
         $this->assertDatabaseHas('orders', [
             'id' => $order->id,
-            'status' => 'paid',
+            'status' => OrderStatus::Paid->value,
             'total_price' => 200,
         ]);
 
@@ -189,4 +189,3 @@ class OrderRepositoryTest extends TestCase
         $this->repository->delete(999);
     }
 }
-

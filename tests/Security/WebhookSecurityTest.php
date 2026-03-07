@@ -2,6 +2,7 @@
 
 namespace Tests\Security;
 
+use App\Enums\OrderStatus;
 use App\Models\Order\OrderModel;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\DataProviderExternal;
@@ -20,21 +21,21 @@ class WebhookSecurityTest extends TestCase
     {
         config(['webhooks.signing_secret' => 'my-secret-key']);
 
-        $order = OrderModel::factory()->create(['status' => 'pending']);
+        $order = OrderModel::factory()->create(['status' => OrderStatus::Pending->value]);
 
         $this->postJson(
             route('v1.webhooks.payments'),
             OrderFixture::webhookPayload($order->id, 'pay_no_sig'),
         )->assertStatus(Response::HTTP_FORBIDDEN);
 
-        $this->assertDatabaseHas('orders', ['id' => $order->id, 'status' => 'pending']);
+        $this->assertDatabaseHas('orders', ['id' => $order->id, 'status' => OrderStatus::Pending->value]);
     }
 
     public function test_webhook_with_wrong_signature(): void
     {
         config(['webhooks.signing_secret' => 'correct-secret']);
 
-        $order = OrderModel::factory()->create(['status' => 'pending']);
+        $order = OrderModel::factory()->create(['status' => OrderStatus::Pending->value]);
 
         $this->postJson(
             route('v1.webhooks.payments'),
@@ -42,7 +43,7 @@ class WebhookSecurityTest extends TestCase
             ['X-Webhook-Signature' => 'definitely-wrong-signature'],
         )->assertStatus(Response::HTTP_FORBIDDEN);
 
-        $this->assertDatabaseHas('orders', ['id' => $order->id, 'status' => 'pending']);
+        $this->assertDatabaseHas('orders', ['id' => $order->id, 'status' => OrderStatus::Pending->value]);
     }
 
     public function test_webhook_with_correct_signature(): void
@@ -50,19 +51,19 @@ class WebhookSecurityTest extends TestCase
         $secret = 'my-webhook-secret';
         config(['webhooks.signing_secret' => $secret]);
 
-        $order = OrderModel::factory()->create(['status' => 'pending']);
+        $order = OrderModel::factory()->create(['status' => OrderStatus::Pending->value]);
 
         $this->payOrderViaSignedWebhook($order->id, $secret, 'pay_valid_sig')
             ->assertStatus(Response::HTTP_OK);
 
-        $this->assertDatabaseHas('orders', ['id' => $order->id, 'status' => 'paid']);
+        $this->assertDatabaseHas('orders', ['id' => $order->id, 'status' => OrderStatus::Paid->value]);
     }
 
     public function test_webhook_without_secret_configured_allows_request(): void
     {
         config(['webhooks.signing_secret' => null]);
 
-        $order = OrderModel::factory()->create(['status' => 'pending']);
+        $order = OrderModel::factory()->create(['status' => OrderStatus::Pending->value]);
 
         $this->payOrderViaWebhook($order->id, 'pay_no_secret')
             ->assertStatus(Response::HTTP_OK);
@@ -72,7 +73,7 @@ class WebhookSecurityTest extends TestCase
     {
         config(['webhooks.signing_secret' => '']);
 
-        $order = OrderModel::factory()->create(['status' => 'pending']);
+        $order = OrderModel::factory()->create(['status' => OrderStatus::Pending->value]);
 
         $this->payOrderViaWebhook($order->id, 'pay_empty_secret')
             ->assertStatus(Response::HTTP_OK);
@@ -83,7 +84,7 @@ class WebhookSecurityTest extends TestCase
         $secret = 'tamper-secret';
         config(['webhooks.signing_secret' => $secret]);
 
-        $order = OrderModel::factory()->create(['status' => 'pending']);
+        $order = OrderModel::factory()->create(['status' => OrderStatus::Pending->value]);
 
         // Generate signature for original payload
         $signed = OrderFixture::signedWebhookPayload($order->id, $secret, 'pay_original');
@@ -105,7 +106,7 @@ class WebhookSecurityTest extends TestCase
     #[DataProviderExternal(SecurityDataProvider::class, 'invalidWebhookStatuses')]
     public function test_webhook_rejects_invalid_status_value(string $status): void
     {
-        $order = OrderModel::factory()->create(['status' => 'pending']);
+        $order = OrderModel::factory()->create(['status' => OrderStatus::Pending->value]);
 
         $this->postJson(route('v1.webhooks.payments'), [
             'order_id' => $order->id,
@@ -117,12 +118,12 @@ class WebhookSecurityTest extends TestCase
     #[DataProviderExternal(SecurityDataProvider::class, 'sqlInjectionPayloads')]
     public function test_webhook_with_sql_injection_in_payment_reference(string $payload): void
     {
-        $order = OrderModel::factory()->create(['status' => 'pending']);
+        $order = OrderModel::factory()->create(['status' => OrderStatus::Pending->value]);
 
         $this->postJson(route('v1.webhooks.payments'), [
             'order_id' => $order->id,
             'payment_reference' => $payload,
-            'status' => 'paid',
+            'status' => OrderStatus::Paid->value,
         ])->assertStatus(Response::HTTP_OK);
 
         $this->assertDatabaseCount('orders', 1);

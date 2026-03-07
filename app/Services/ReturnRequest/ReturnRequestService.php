@@ -64,9 +64,11 @@ final readonly class ReturnRequestService implements ReturnRequestServiceInterfa
 
         $allowedStatuses = [OrderStatus::Delivered, OrderStatus::Paid, OrderStatus::Shipped];
         if (! in_array($order->status, $allowedStatuses, true)) {
+            $allowed = implode(', ', array_map(static fn (OrderStatus $s) => $s->value, $allowedStatuses));
+
             throw new InvalidReturnRequestStateException(
                 "Cannot create return request for order with status '{$order->status->value}'. "
-                ."Order must be in 'paid', 'shipped', or 'delivered' status.",
+                ."Order must be in one of: {$allowed}.",
             );
         }
 
@@ -102,7 +104,7 @@ final readonly class ReturnRequestService implements ReturnRequestServiceInterfa
 
         if ($returnRequest->status !== ReturnRequestStatus::Pending) {
             throw new InvalidReturnRequestStateException(
-                "Cannot approve return request: current status is '{$returnRequest->status->value}', expected 'pending'.",
+                "Cannot approve return request: current status is '{$returnRequest->status->value}', expected '".ReturnRequestStatus::Pending->value."'.",
             );
         }
 
@@ -167,7 +169,7 @@ final readonly class ReturnRequestService implements ReturnRequestServiceInterfa
 
         if ($returnRequest->status !== ReturnRequestStatus::Pending) {
             throw new InvalidReturnRequestStateException(
-                "Cannot reject return request: current status is '{$returnRequest->status->value}', expected 'pending'.",
+                "Cannot reject return request: current status is '{$returnRequest->status->value}', expected '".ReturnRequestStatus::Pending->value."'.",
             );
         }
 

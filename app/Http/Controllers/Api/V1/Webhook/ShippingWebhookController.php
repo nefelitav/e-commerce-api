@@ -7,16 +7,16 @@ use App\Exceptions\BadRequestException;
 use App\Exceptions\InvalidOrderStateException;
 use App\Exceptions\OrderNotFoundException;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Webhook\PaymentWebhookRequest;
+use App\Http\Requests\Webhook\ShippingWebhookRequest;
 use App\Http\Responses\ApiResponse;
-use App\Http\Responses\Webhook\PaymentWebhookResponse;
+use App\Http\Responses\Webhook\ShippingWebhookResponse;
 use App\Services\Order\OrderService;
 use App\Transformers\OrderTransformer;
 use Illuminate\Http\JsonResponse;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Log\Logger;
 
-final readonly class PaymentWebhookController extends Controller
+final readonly class ShippingWebhookController extends Controller
 {
     use ApiResponse;
 
@@ -26,35 +26,32 @@ final readonly class PaymentWebhookController extends Controller
         private Logger $logger,
     ) {}
 
-    public function __invoke(PaymentWebhookRequest $request): JsonResponse
+    public function __invoke(ShippingWebhookRequest $request): JsonResponse
     {
         /** @var array<string, mixed> $validated */
         $validated = $request->validated();
 
         /** @var int $orderId */
         $orderId = $validated['order_id'];
-        /** @var string $paymentReference */
-        $paymentReference = $validated['payment_reference'];
-        /** @var string $status */
-        $status = $validated['status'];
+        /** @var string $event */
+        $event = $validated['event'];
 
         try {
-            $order = match ($status) {
-                OrderStatus::Paid->value => $this->service->markOrderAsPaid($orderId, $paymentReference),
-                OrderStatus::PaymentFailed->value => $this->service->markOrderAsPaymentFailed($orderId, $paymentReference),
-                default => throw new InvalidOrderStateException("Invalid status value: $status"),
+            $order = match ($event) {
+                OrderStatus::Shipped->value => $this->service->markOrderAsShipped($orderId, (string) $validated['tracking_number']),
+                OrderStatus::Delivered->value => $this->service->markOrderAsDelivered($orderId),
+                default => throw new InvalidOrderStateException("Invalid status value: $event"),
             };
         } catch (OrderNotFoundException|InvalidOrderStateException $e) {
             throw new BadRequestException($e);
         }
 
         $orderData = $this->transformer->transform($order);
-        $this->logger->info('Payment webhook processed.', [
+        $this->logger->info('Shipping webhook processed.', [
             'order_id' => $orderId,
-            'payment_reference' => $paymentReference,
-            'status' => $status,
+            'event' => $event,
         ]);
 
-        return self::success(new PaymentWebhookResponse($orderData), Response::HTTP_OK);
+        return self::success(new ShippingWebhookResponse($orderData, $event), Response::HTTP_OK);
     }
 }

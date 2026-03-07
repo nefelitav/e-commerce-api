@@ -2,6 +2,7 @@
 
 namespace Tests\Performance;
 
+use App\Enums\OrderStatus;
 use App\Models\Order\OrderItemModel;
 use App\Models\Order\OrderModel;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -153,7 +154,7 @@ class ApiResponseTimeTest extends TestCase
 
     public function test_payment_webhook_responds_within_threshold(): void
     {
-        $order = OrderModel::factory()->create(['status' => 'pending']);
+        $order = OrderModel::factory()->create(['status' => OrderStatus::Pending->value]);
 
         $response = $this->assertPostRespondsWithinMs(
             route('v1.webhooks.payments'),

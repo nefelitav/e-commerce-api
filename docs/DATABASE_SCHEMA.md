@@ -263,11 +263,13 @@ CREATE INDEX idx_orders_status ON orders(status);
 
 **Status Values:**
 - `pending` - Order created, awaiting payment
+- `payment_failed` - Payment attempt failed, can retry
 - `paid` - Payment received
-- `shipped` - Order sent to customer
-- `delivered` - Order received
-- `cancelled` - Order cancelled
-- `refunded` - Order refunded
+- `processing` - Warehouse preparing the package for shipment
+- `shipped` - Order picked up by shipping carrier
+- `delivered` - Order delivered to customer
+- `cancelled` - Order cancelled (auto-refund if previously paid/processing)
+- `refunded` - Order refunded (stock restored)
 
 ---
 
@@ -432,6 +434,7 @@ CREATE INDEX idx_return_requests_status ON return_requests(status);
 **Status Values (App\Enums\ReturnRequestStatus):**
 - `pending` - Request submitted, awaiting admin review
 - `approved` - Return approved, order refunded, stock restored
+- `returning` - Return approved, awaiting item to be received back
 - `rejected` - Return request denied
 
 ---
@@ -589,7 +592,8 @@ database/migrations/
 ├── 2026_03_06_000001_add_fulltext_index_to_products_table.php  (fulltext search on products)
 ├── 2026_03_06_000002_create_return_requests_table.php  (return/refund requests)
 ├── 2026_03_06_000003_create_coupons_table.php          (discount coupons)
-└── 2026_03_06_000004_add_coupon_fields_to_orders_table.php  (coupon_id, discount_amount on orders)
+├── 2026_03_06_000004_add_coupon_fields_to_orders_table.php  (coupon_id, discount_amount on orders)
+└── 2026_03_07_000001_add_processing_and_payment_failed_order_statuses.php  (new order status check constraint)
 ```
 
 **Note:** The cart feature was removed. The `2026_03_04_000001_drop_cart_tables.php` migration drops the `carts` and `cart_items` tables that were created by earlier migrations.

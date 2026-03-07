@@ -1,5 +1,7 @@
 <?php
+
 namespace Tests\Unit\Services;
+
 use App\Dto\InventoryHistory\InventoryHistoryEntry;
 use App\Dto\InventoryHistory\UnpersistedInventoryHistoryEntry;
 use App\Dto\Order\Order;
@@ -7,6 +9,7 @@ use App\Dto\Order\UnpersistedOrder;
 use App\Dto\Order\UnpersistedOrderItem;
 use App\Enums\InventoryChangeType;
 use App\Enums\OrderStatus;
+use App\Events\OrderCancelledEvent;
 use App\Events\OrderCreatedEvent;
 use App\Events\OrderPaidEvent;
 use App\Events\OrderShippedEvent;
@@ -23,44 +26,51 @@ use App\Repositories\Order\OrderRepositoryInterface;
 use App\Repositories\Product\ProductRepositoryInterface;
 use App\Services\AuditLogger;
 use App\Services\Order\OrderService;
-use App\Services\Order\OrderStatusMachine;
 use App\Services\Order\OrderStatusMachineInterface;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Event;
 use PHPUnit\Framework\MockObject\MockObject;
 use Tests\TestCase;
+
 class OrderServiceTest extends TestCase
 {
     use RefreshDatabase;
+
     /** @var OrderRepositoryInterface&MockObject */
     private OrderRepositoryInterface $repository;
+
     /** @var ProductRepositoryInterface&MockObject */
     private ProductRepositoryInterface $productRepository;
+
     /** @var InventoryHistoryRepositoryInterface&MockObject */
     private InventoryHistoryRepositoryInterface $inventoryHistoryRepository;
+
     /** @var OrderStatusMachineInterface&MockObject */
     private OrderStatusMachineInterface $statusMachine;
+
     private OrderService $service;
+
     protected function setUp(): void
     {
         parent::setUp();
-        $this->repository                 = $this->createMock(OrderRepositoryInterface::class);
-        $this->productRepository          = $this->createMock(ProductRepositoryInterface::class);
+        $this->repository = $this->createMock(OrderRepositoryInterface::class);
+        $this->productRepository = $this->createMock(ProductRepositoryInterface::class);
         $this->inventoryHistoryRepository = $this->createMock(InventoryHistoryRepositoryInterface::class);
-        $this->statusMachine              = $this->createMock(OrderStatusMachineInterface::class);
+        $this->statusMachine = $this->createMock(OrderStatusMachineInterface::class);
         $this->service = new OrderService(
             $this->repository,
             $this->productRepository,
             $this->inventoryHistoryRepository,
             $this->statusMachine,
-            new AuditLogger(),
+            new AuditLogger,
         );
     }
-    public function test_listOrders_returns_paginator_of_orders(): void
+
+    public function test_list_orders_returns_paginator_of_orders(): void
     {
         $orderModel = OrderModel::factory()->create();
-        $order      = Order::fromModel($orderModel);
+        $order = Order::fromModel($orderModel);
         $paginator = new LengthAwarePaginator([$order], 1, 15, 1);
         $this->repository
             ->expects($this->once())
@@ -69,9 +79,10 @@ class OrderServiceTest extends TestCase
             ->willReturn($paginator);
         $this->service->listOrders(1, 15, 'id', 'asc', [], []);
     }
-    public function test_getOrderById_returns_order(): void
+
+    public function test_get_order_by_id_returns_order(): void
     {
-        $id    = 1;
+        $id = 1;
         $order = Order::fromModel(OrderModel::factory()->create());
         $this->repository
             ->expects($this->once())
@@ -81,7 +92,8 @@ class OrderServiceTest extends TestCase
         $result = $this->service->getOrderById($id);
         $this->assertSame($order, $result);
     }
-    public function test_getOrderById_returns_null(): void
+
+    public function test_get_order_by_id_returns_null(): void
     {
         $id = 1;
         $this->repository
@@ -92,21 +104,22 @@ class OrderServiceTest extends TestCase
         $result = $this->service->getOrderById($id);
         $this->assertNull($result);
     }
-    public function test_createOrder_deducts_stock_and_records_inventory_history(): void
+
+    public function test_create_order_deducts_stock_and_records_inventory_history(): void
     {
         $user = UserModel::factory()->create();
         /** @var ProductModel $productModel */
         $productModel = ProductModel::factory()->create(['quantity' => 10]);
         $item = new UnpersistedOrderItem(
             productId: $productModel->id,
-            quantity:  3,
+            quantity: 3,
             unitPrice: 50.0,
         );
         $unpersisted = new UnpersistedOrder(
-            userId:     $user->id,
-            status:     OrderStatus::Pending,
+            userId: $user->id,
+            status: OrderStatus::Pending,
             totalPrice: 150,
-            items:      [$item],
+            items: [$item],
         );
         $persisted = Order::fromModel(OrderModel::factory()->create());
         $this->productRepository
@@ -118,11 +131,11 @@ class OrderServiceTest extends TestCase
             ->expects($this->once())
             ->method('record')
             ->with($this->callback(function (UnpersistedInventoryHistoryEntry $entry) use ($productModel) {
-                return $entry->productId       === $productModel->id
-                    && $entry->changeType      === InventoryChangeType::Sale
+                return $entry->productId === $productModel->id
+                    && $entry->changeType === InventoryChangeType::Sale
                     && $entry->previousQuantity === 10
-                    && $entry->newQuantity      === 7
-                    && $entry->quantityChanged  === -3;
+                    && $entry->newQuantity === 7
+                    && $entry->quantityChanged === -3;
             }))
             ->willReturn(InventoryHistoryEntry::fromModel(InventoryHistoryModel::factory()->create()));
         $this->repository
@@ -133,21 +146,22 @@ class OrderServiceTest extends TestCase
         $result = $this->service->createOrder($unpersisted);
         $this->assertSame($persisted, $result);
     }
-    public function test_createOrder_throws_InsufficientStockException_when_stock_too_low(): void
+
+    public function test_create_order_throws_insufficient_stock_exception_when_stock_too_low(): void
     {
         $user = UserModel::factory()->create();
         /** @var ProductModel $productModel */
         $productModel = ProductModel::factory()->create(['quantity' => 2]);
         $item = new UnpersistedOrderItem(
             productId: $productModel->id,
-            quantity:  5,
+            quantity: 5,
             unitPrice: 50.0,
         );
         $unpersisted = new UnpersistedOrder(
-            userId:     $user->id,
-            status:     OrderStatus::Pending,
+            userId: $user->id,
+            status: OrderStatus::Pending,
             totalPrice: 250,
-            items:      [$item],
+            items: [$item],
         );
         $this->productRepository
             ->expects($this->once())
@@ -160,19 +174,20 @@ class OrderServiceTest extends TestCase
         $this->expectException(InsufficientStockException::class);
         $this->service->createOrder($unpersisted);
     }
-    public function test_createOrder_throws_ProductNotFoundException_when_product_missing(): void
+
+    public function test_create_order_throws_product_not_found_exception_when_product_missing(): void
     {
         $user = UserModel::factory()->create();
         $item = new UnpersistedOrderItem(
             productId: 9999,
-            quantity:  1,
+            quantity: 1,
             unitPrice: 50.0,
         );
         $unpersisted = new UnpersistedOrder(
-            userId:     $user->id,
-            status:     OrderStatus::Pending,
+            userId: $user->id,
+            status: OrderStatus::Pending,
             totalPrice: 50,
-            items:      [$item],
+            items: [$item],
         );
         $this->productRepository
             ->expects($this->once())
@@ -185,7 +200,8 @@ class OrderServiceTest extends TestCase
         $this->expectException(ProductNotFoundException::class);
         $this->service->createOrder($unpersisted);
     }
-    public function test_createOrder_dispatches_order_created_event(): void
+
+    public function test_create_order_dispatches_order_created_event(): void
     {
         Event::fake([OrderCreatedEvent::class]);
         $user = UserModel::factory()->create();
@@ -212,20 +228,22 @@ class OrderServiceTest extends TestCase
             return $event->order->id === $persisted->id;
         });
     }
-    public function test_updateOrder_delegates_to_user_status_machine(): void
+
+    public function test_update_order_delegates_to_user_status_machine(): void
     {
-        $id   = 1;
+        Event::fake([OrderCancelledEvent::class]);
+        $id = 1;
         $user = UserModel::factory()->create();
         /** @var OrderModel $orderModel */
-        $orderModel    = OrderModel::factory()->create(['status' => OrderStatus::Pending->value]);
+        $orderModel = OrderModel::factory()->create(['status' => OrderStatus::Pending->value]);
         $existingOrder = Order::fromModel($orderModel);
         $unpersisted = new UnpersistedOrder(
-            userId:     $user->id,
-            status:     OrderStatus::Cancelled,
+            userId: $user->id,
+            status: OrderStatus::Cancelled,
             totalPrice: 200,
-            items:      [],
+            items: [],
         );
-        $updated = Order::fromModel(OrderModel::factory()->create());
+        $updated = Order::fromModel(OrderModel::factory()->create(['status' => OrderStatus::Cancelled->value]));
         $this->repository
             ->expects($this->once())
             ->method('findById')
@@ -241,20 +259,25 @@ class OrderServiceTest extends TestCase
         $this->repository
             ->expects($this->once())
             ->method('update')
-            ->with($id, $unpersisted)
+            ->with($id, $this->callback(function (UnpersistedOrder $order) use ($existingOrder) {
+                return $order->userId === $existingOrder->userId
+                    && $order->status === OrderStatus::Cancelled
+                    && $order->totalPrice === $existingOrder->totalPrice;
+            }))
             ->willReturn($updated);
         $result = $this->service->updateOrder($id, $unpersisted);
         $this->assertSame($updated, $result);
     }
-    public function test_updateOrder_throws_OrderNotFoundException(): void
+
+    public function test_update_order_throws_order_not_found_exception(): void
     {
-        $id   = 1;
+        $id = 1;
         $user = UserModel::factory()->create();
         $unpersisted = new UnpersistedOrder(
-            userId:     $user->id,
-            status:     OrderStatus::Cancelled,
+            userId: $user->id,
+            status: OrderStatus::Cancelled,
             totalPrice: 200,
-            items:      [],
+            items: [],
         );
         $this->repository
             ->expects($this->once())
@@ -267,18 +290,19 @@ class OrderServiceTest extends TestCase
         $this->expectException(OrderNotFoundException::class);
         $this->service->updateOrder($id, $unpersisted);
     }
-    public function test_updateOrder_delegates_to_admin_status_machine_for_admin(): void
+
+    public function test_update_order_delegates_to_admin_status_machine_for_admin(): void
     {
-        $id   = 1;
+        $id = 1;
         $user = UserModel::factory()->create();
         /** @var OrderModel $orderModel */
-        $orderModel    = OrderModel::factory()->create(['status' => OrderStatus::Pending->value]);
+        $orderModel = OrderModel::factory()->create(['status' => OrderStatus::Pending->value]);
         $existingOrder = Order::fromModel($orderModel);
         $unpersisted = new UnpersistedOrder(
-            userId:     $user->id,
-            status:     OrderStatus::Paid,
+            userId: $user->id,
+            status: OrderStatus::Paid,
             totalPrice: 200,
-            items:      [],
+            items: [],
         );
         $updated = Order::fromModel(OrderModel::factory()->create());
         $this->repository
@@ -301,7 +325,8 @@ class OrderServiceTest extends TestCase
         $result = $this->service->updateOrder($id, $unpersisted, asAdmin: true);
         $this->assertSame($updated, $result);
     }
-    public function test_markOrderAsPaid_transitions_pending_order_and_dispatches_event(): void
+
+    public function test_mark_order_as_paid_transitions_pending_order_and_dispatches_event(): void
     {
         Event::fake([OrderPaidEvent::class]);
         $user = UserModel::factory()->create();
@@ -326,7 +351,8 @@ class OrderServiceTest extends TestCase
             return $event->order->id === $updated->id;
         });
     }
-    public function test_markOrderAsPaid_throws_when_order_not_pending(): void
+
+    public function test_mark_order_as_paid_throws_when_order_not_pending(): void
     {
         $user = UserModel::factory()->create();
         /** @var OrderModel $orderModel */
@@ -336,18 +362,27 @@ class OrderServiceTest extends TestCase
         ]);
         $existingOrder = Order::fromModel($orderModel);
         $this->repository->method('findById')->willReturn($existingOrder);
+        $this->statusMachine
+            ->expects($this->once())
+            ->method('assertWebhookTransitionAllowed')
+            ->with($existingOrder, OrderStatus::Paid)
+            ->willThrowException(new InvalidOrderStateException(
+                "Webhook transition from 'shipped' to 'paid' is not allowed.",
+            ));
         $this->expectException(InvalidOrderStateException::class);
         $this->service->markOrderAsPaid(1, 'pay_ref_123');
     }
-    public function test_markOrderAsPaid_throws_when_order_not_found(): void
+
+    public function test_mark_order_as_paid_throws_when_order_not_found(): void
     {
         $this->repository->method('findById')->willReturn(null);
         $this->expectException(OrderNotFoundException::class);
         $this->service->markOrderAsPaid(999, 'pay_ref_123');
     }
-    public function test_updateOrder_does_not_dispatch_paid_event(): void
+
+    public function test_update_order_does_not_dispatch_paid_event(): void
     {
-        Event::fake([OrderPaidEvent::class]);
+        Event::fake([OrderPaidEvent::class, OrderCancelledEvent::class]);
         $user = UserModel::factory()->create();
         /** @var OrderModel $orderModel */
         $orderModel = OrderModel::factory()->create(['status' => OrderStatus::Pending->value]);
@@ -364,12 +399,13 @@ class OrderServiceTest extends TestCase
         $this->service->updateOrder(1, $unpersisted);
         Event::assertNotDispatched(OrderPaidEvent::class);
     }
-    public function test_updateOrder_dispatches_shipped_event_on_shipped_transition(): void
+
+    public function test_update_order_dispatches_shipped_event_on_shipped_transition(): void
     {
         Event::fake([OrderShippedEvent::class]);
         $user = UserModel::factory()->create();
         /** @var OrderModel $orderModel */
-        $orderModel = OrderModel::factory()->create(['status' => OrderStatus::Paid->value]);
+        $orderModel = OrderModel::factory()->create(['status' => OrderStatus::Processing->value]);
         $existingOrder = Order::fromModel($orderModel);
         $unpersisted = new UnpersistedOrder(
             userId: $user->id,
@@ -385,9 +421,10 @@ class OrderServiceTest extends TestCase
             return $event->order->id === $updated->id;
         });
     }
-    public function test_updateOrder_does_not_dispatch_shipped_event_on_non_shipped_transition(): void
+
+    public function test_update_order_does_not_dispatch_shipped_event_on_non_shipped_transition(): void
     {
-        Event::fake([OrderShippedEvent::class]);
+        Event::fake([OrderShippedEvent::class, OrderCancelledEvent::class]);
         $user = UserModel::factory()->create();
         /** @var OrderModel $orderModel */
         $orderModel = OrderModel::factory()->create(['status' => OrderStatus::Pending->value]);
@@ -404,7 +441,8 @@ class OrderServiceTest extends TestCase
         $this->service->updateOrder(1, $unpersisted);
         Event::assertNotDispatched(OrderShippedEvent::class);
     }
-    public function test_deleteOrder_restores_inventory_and_returns_true(): void
+
+    public function test_delete_order_restores_inventory_and_returns_true(): void
     {
         $user = UserModel::factory()->create();
         /** @var ProductModel $productModel */
@@ -457,7 +495,8 @@ class OrderServiceTest extends TestCase
         $result = $this->service->deleteOrder($orderModel->id);
         $this->assertTrue($result);
     }
-    public function test_deleteOrder_throws_OrderNotFoundException(): void
+
+    public function test_delete_order_throws_order_not_found_exception(): void
     {
         $id = 1;
         $this->repository

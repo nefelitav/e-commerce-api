@@ -20,7 +20,7 @@ class OrderStatusMachineTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->machine = new OrderStatusMachine();
+        $this->machine = new OrderStatusMachine;
     }
 
     // -----------------------------------------------------------------------
@@ -32,7 +32,7 @@ class OrderStatusMachineTest extends TestCase
         Carbon::setTestNow(now());
 
         $order = Order::fromModel(OrderModel::factory()->create([
-            'status'     => OrderStatus::Pending->value,
+            'status' => OrderStatus::Pending->value,
             'created_at' => now()->subHours(2),
         ]));
 
@@ -47,7 +47,54 @@ class OrderStatusMachineTest extends TestCase
         Carbon::setTestNow(now());
 
         $order = Order::fromModel(OrderModel::factory()->create([
-            'status'     => OrderStatus::Pending->value,
+            'status' => OrderStatus::Pending->value,
+            'created_at' => now()->subHours(25),
+        ]));
+
+        $this->expectException(InvalidOrderStateException::class);
+        $this->expectExceptionMessage('Orders can only be cancelled within 24 hours of creation.');
+
+        $this->machine->assertUserTransitionAllowed($order, OrderStatus::Cancelled);
+
+        Carbon::setTestNow(null);
+    }
+
+    public function test_user_payment_failed_to_cancelled_within_window_is_allowed(): void
+    {
+        Carbon::setTestNow(now());
+
+        $order = Order::fromModel(OrderModel::factory()->create([
+            'status' => OrderStatus::PaymentFailed->value,
+            'created_at' => now()->subHours(2),
+        ]));
+
+        $this->expectNotToPerformAssertions();
+        $this->machine->assertUserTransitionAllowed($order, OrderStatus::Cancelled);
+
+        Carbon::setTestNow(null);
+    }
+
+    public function test_user_paid_to_cancelled_within_window_is_allowed(): void
+    {
+        Carbon::setTestNow(now());
+
+        $order = Order::fromModel(OrderModel::factory()->create([
+            'status' => OrderStatus::Paid->value,
+            'created_at' => now()->subHours(2),
+        ]));
+
+        $this->expectNotToPerformAssertions();
+        $this->machine->assertUserTransitionAllowed($order, OrderStatus::Cancelled);
+
+        Carbon::setTestNow(null);
+    }
+
+    public function test_user_paid_to_cancelled_after_window_throws(): void
+    {
+        Carbon::setTestNow(now());
+
+        $order = Order::fromModel(OrderModel::factory()->create([
+            'status' => OrderStatus::Paid->value,
             'created_at' => now()->subHours(25),
         ]));
 
@@ -77,9 +124,17 @@ class OrderStatusMachineTest extends TestCase
         $this->machine->assertUserTransitionAllowed($order, OrderStatus::Shipped);
     }
 
-    public function test_user_paid_to_cancelled_throws(): void
+    public function test_user_processing_to_cancelled_throws(): void
     {
-        $order = Order::fromModel(OrderModel::factory()->create(['status' => OrderStatus::Paid->value]));
+        $order = Order::fromModel(OrderModel::factory()->create(['status' => OrderStatus::Processing->value]));
+
+        $this->expectException(InvalidOrderStateException::class);
+        $this->machine->assertUserTransitionAllowed($order, OrderStatus::Cancelled);
+    }
+
+    public function test_user_shipped_to_cancelled_throws(): void
+    {
+        $order = Order::fromModel(OrderModel::factory()->create(['status' => OrderStatus::Shipped->value]));
 
         $this->expectException(InvalidOrderStateException::class);
         $this->machine->assertUserTransitionAllowed($order, OrderStatus::Cancelled);
@@ -105,12 +160,28 @@ class OrderStatusMachineTest extends TestCase
         $this->machine->assertAdminTransitionAllowed($order, OrderStatus::Cancelled);
     }
 
-    public function test_admin_paid_to_shipped_is_allowed(): void
+    public function test_admin_payment_failed_to_paid_is_allowed(): void
+    {
+        $order = Order::fromModel(OrderModel::factory()->create(['status' => OrderStatus::PaymentFailed->value]));
+
+        $this->expectNotToPerformAssertions();
+        $this->machine->assertAdminTransitionAllowed($order, OrderStatus::Paid);
+    }
+
+    public function test_admin_payment_failed_to_cancelled_is_allowed(): void
+    {
+        $order = Order::fromModel(OrderModel::factory()->create(['status' => OrderStatus::PaymentFailed->value]));
+
+        $this->expectNotToPerformAssertions();
+        $this->machine->assertAdminTransitionAllowed($order, OrderStatus::Cancelled);
+    }
+
+    public function test_admin_paid_to_processing_is_allowed(): void
     {
         $order = Order::fromModel(OrderModel::factory()->create(['status' => OrderStatus::Paid->value]));
 
         $this->expectNotToPerformAssertions();
-        $this->machine->assertAdminTransitionAllowed($order, OrderStatus::Shipped);
+        $this->machine->assertAdminTransitionAllowed($order, OrderStatus::Processing);
     }
 
     public function test_admin_paid_to_refunded_is_allowed(): void
@@ -119,6 +190,30 @@ class OrderStatusMachineTest extends TestCase
 
         $this->expectNotToPerformAssertions();
         $this->machine->assertAdminTransitionAllowed($order, OrderStatus::Refunded);
+    }
+
+    public function test_admin_paid_to_cancelled_is_allowed(): void
+    {
+        $order = Order::fromModel(OrderModel::factory()->create(['status' => OrderStatus::Paid->value]));
+
+        $this->expectNotToPerformAssertions();
+        $this->machine->assertAdminTransitionAllowed($order, OrderStatus::Cancelled);
+    }
+
+    public function test_admin_processing_to_shipped_is_allowed(): void
+    {
+        $order = Order::fromModel(OrderModel::factory()->create(['status' => OrderStatus::Processing->value]));
+
+        $this->expectNotToPerformAssertions();
+        $this->machine->assertAdminTransitionAllowed($order, OrderStatus::Shipped);
+    }
+
+    public function test_admin_processing_to_cancelled_is_allowed(): void
+    {
+        $order = Order::fromModel(OrderModel::factory()->create(['status' => OrderStatus::Processing->value]));
+
+        $this->expectNotToPerformAssertions();
+        $this->machine->assertAdminTransitionAllowed($order, OrderStatus::Cancelled);
     }
 
     public function test_admin_shipped_to_delivered_is_allowed(): void
@@ -161,5 +256,85 @@ class OrderStatusMachineTest extends TestCase
         $this->expectExceptionMessage("Transition from 'paid' to 'delivered' is not allowed.");
 
         $this->machine->assertAdminTransitionAllowed($order, OrderStatus::Delivered);
+    }
+
+    public function test_admin_paid_to_shipped_throws(): void
+    {
+        $order = Order::fromModel(OrderModel::factory()->create(['status' => OrderStatus::Paid->value]));
+
+        $this->expectException(InvalidOrderStateException::class);
+        $this->expectExceptionMessage("Transition from 'paid' to 'shipped' is not allowed.");
+
+        $this->machine->assertAdminTransitionAllowed($order, OrderStatus::Shipped);
+    }
+
+    // -----------------------------------------------------------------------
+    // Webhook transitions
+    // -----------------------------------------------------------------------
+
+    public function test_webhook_pending_to_paid_is_allowed(): void
+    {
+        $order = Order::fromModel(OrderModel::factory()->create(['status' => OrderStatus::Pending->value]));
+
+        $this->expectNotToPerformAssertions();
+        $this->machine->assertWebhookTransitionAllowed($order, OrderStatus::Paid);
+    }
+
+    public function test_webhook_pending_to_payment_failed_is_allowed(): void
+    {
+        $order = Order::fromModel(OrderModel::factory()->create(['status' => OrderStatus::Pending->value]));
+
+        $this->expectNotToPerformAssertions();
+        $this->machine->assertWebhookTransitionAllowed($order, OrderStatus::PaymentFailed);
+    }
+
+    public function test_webhook_payment_failed_to_paid_is_allowed(): void
+    {
+        $order = Order::fromModel(OrderModel::factory()->create(['status' => OrderStatus::PaymentFailed->value]));
+
+        $this->expectNotToPerformAssertions();
+        $this->machine->assertWebhookTransitionAllowed($order, OrderStatus::Paid);
+    }
+
+    public function test_webhook_processing_to_shipped_is_allowed(): void
+    {
+        $order = Order::fromModel(OrderModel::factory()->create(['status' => OrderStatus::Processing->value]));
+
+        $this->expectNotToPerformAssertions();
+        $this->machine->assertWebhookTransitionAllowed($order, OrderStatus::Shipped);
+    }
+
+    public function test_webhook_shipped_to_delivered_is_allowed(): void
+    {
+        $order = Order::fromModel(OrderModel::factory()->create(['status' => OrderStatus::Shipped->value]));
+
+        $this->expectNotToPerformAssertions();
+        $this->machine->assertWebhookTransitionAllowed($order, OrderStatus::Delivered);
+    }
+
+    public function test_webhook_paid_to_shipped_throws(): void
+    {
+        $order = Order::fromModel(OrderModel::factory()->create(['status' => OrderStatus::Paid->value]));
+
+        $this->expectException(InvalidOrderStateException::class);
+        $this->expectExceptionMessage("Webhook transition from 'paid' to 'shipped' is not allowed.");
+
+        $this->machine->assertWebhookTransitionAllowed($order, OrderStatus::Shipped);
+    }
+
+    public function test_webhook_cancelled_throws(): void
+    {
+        $order = Order::fromModel(OrderModel::factory()->create(['status' => OrderStatus::Cancelled->value]));
+
+        $this->expectException(InvalidOrderStateException::class);
+        $this->machine->assertWebhookTransitionAllowed($order, OrderStatus::Paid);
+    }
+
+    public function test_webhook_delivered_throws(): void
+    {
+        $order = Order::fromModel(OrderModel::factory()->create(['status' => OrderStatus::Delivered->value]));
+
+        $this->expectException(InvalidOrderStateException::class);
+        $this->machine->assertWebhookTransitionAllowed($order, OrderStatus::Shipped);
     }
 }

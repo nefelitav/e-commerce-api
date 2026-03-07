@@ -108,7 +108,9 @@ Complete documentation is available in the `docs/` directory:
 - Filter by status or price range
 - Track order items
 - User-specific orders
-- Status lifecycle: pending → paid → shipped → delivered / cancelled / refunded
+- Status lifecycle: pending → paid → processing → shipped → delivered
+- Cancellation with auto-refund (restores stock when cancelling paid/processing orders)
+- User cancellation within 24h window from pending, payment_failed, or paid
 
 ### Coupons
 - Apply coupon codes to orders (percentage or fixed amount)
@@ -119,6 +121,7 @@ Complete documentation is available in the `docs/` directory:
 ### Return Requests
 - Submit return requests for orders
 - Track return status (pending → approved / rejected)
+- Approval automatically refunds the order and restores stock
 - Admin: approve or reject with notes
 
 ### Inventory History
@@ -127,8 +130,10 @@ Complete documentation is available in the `docs/` directory:
 - Product-specific history (admin only)
 
 ### Webhooks
-- Payment webhook endpoint for external providers
-- Marks orders as paid and triggers event-driven notifications
+- **Payment webhook** (`POST /api/v1/webhooks/payments`): payment provider reports `paid` or `payment_failed`
+- **Shipping webhook** (`POST /api/v1/webhooks/shipping`): shipping carrier reports `shipped` or `delivered`
+- HMAC-SHA256 signature verification
+- Triggers event-driven notifications (emails, outbound webhooks)
 
 ## 🚀 Quick API Examples
 
@@ -167,7 +172,27 @@ POST /api/v1/return-requests/7/approve
 
 # Process a payment webhook (external provider callback)
 POST /api/v1/webhooks/payments
-{ "order_id": 42, "payment_reference": "pay_abc123" }
+{ "order_id": 42, "payment_reference": "pay_abc123", "status": "paid" }
+
+# Payment failed webhook (retry later)
+POST /api/v1/webhooks/payments
+{ "order_id": 42, "payment_reference": "pay_abc123", "status": "payment_failed" }
+
+# Admin: start order fulfilment (paid → processing)
+PUT /api/v1/orders/42
+{ "status": "processing", "total_price": 259.98 }
+
+# Shipping carrier webhook: order shipped
+POST /api/v1/webhooks/shipping
+{ "order_id": 42, "event": "shipped", "tracking_number": "1Z999AA10123456784" }
+
+# Shipping carrier webhook: order delivered
+POST /api/v1/webhooks/shipping
+{ "order_id": 42, "event": "delivered" }
+
+# User: cancel a paid order within 24h (auto-refund + stock restored)
+PUT /api/v1/orders/42
+{ "status": "cancelled", "total_price": 259.98 }
 
 # Admin: view inventory audit trail for a product
 GET /api/v1/products/1/inventory-history

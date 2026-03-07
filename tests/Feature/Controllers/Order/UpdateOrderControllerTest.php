@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Controllers\Order;
 
+use App\Enums\OrderStatus;
 use App\Models\Order\OrderItemModel;
 use App\Models\Order\OrderModel;
 use App\Models\Product\ProductModel;
@@ -27,7 +28,7 @@ class UpdateOrderControllerTest extends TestCase
         $this->actingAs($admin);
 
         $order = OrderModel::factory()->create([
-            'status' => 'paid',
+            'status' => OrderStatus::Paid->value,
             'total_price' => 100,
         ]);
 
@@ -43,7 +44,7 @@ class UpdateOrderControllerTest extends TestCase
 
         $payload = [
             'id' => $order->id,
-            'status' => 'shipped',
+            'status' => OrderStatus::Processing->value,
             'total_price' => 200,
             'items' => [
                 ['product_id' => $newProduct->id, 'quantity' => 2, 'unit_price' => 100],
@@ -53,9 +54,9 @@ class UpdateOrderControllerTest extends TestCase
         $response = $this->putJson(route('v1.orders.update', $order->id), $payload);
 
         $response->assertStatus(Response::HTTP_OK)
-            ->assertJsonFragment(['status' => 'shipped']);
+            ->assertJsonFragment(['status' => OrderStatus::Processing->value]);
 
-        $this->assertDatabaseHas('orders', ['id' => $order->id, 'status' => 'shipped']);
+        $this->assertDatabaseHas('orders', ['id' => $order->id, 'status' => OrderStatus::Processing->value]);
     }
 
     public function test_regular_user_can_cancel_own_pending_order_within_24_hours(): void
@@ -65,7 +66,7 @@ class UpdateOrderControllerTest extends TestCase
 
         $order = OrderModel::factory()->create([
             'user_id' => $user->id,
-            'status' => 'pending',
+            'status' => OrderStatus::Pending->value,
             'total_price' => 100,
         ]);
 
@@ -79,7 +80,7 @@ class UpdateOrderControllerTest extends TestCase
 
         $payload = [
             'id' => $order->id,
-            'status' => 'cancelled',
+            'status' => OrderStatus::Cancelled->value,
             'total_price' => 100,
             'items' => [
                 ['product_id' => $product->id, 'quantity' => 1, 'unit_price' => 100],
@@ -89,7 +90,7 @@ class UpdateOrderControllerTest extends TestCase
         $response = $this->putJson(route('v1.orders.update', $order->id), $payload);
 
         $response->assertStatus(Response::HTTP_OK)
-            ->assertJsonFragment(['status' => 'cancelled']);
+            ->assertJsonFragment(['status' => OrderStatus::Cancelled->value]);
     }
 
     public function test_regular_user_cannot_transition_to_non_allowed_status(): void
@@ -99,7 +100,7 @@ class UpdateOrderControllerTest extends TestCase
 
         $order = OrderModel::factory()->create([
             'user_id' => $user->id,
-            'status' => 'pending',
+            'status' => OrderStatus::Pending->value,
             'total_price' => 100,
         ]);
 
@@ -113,7 +114,7 @@ class UpdateOrderControllerTest extends TestCase
 
         $payload = [
             'id' => $order->id,
-            'status' => 'shipped',  // not allowed for users
+            'status' => OrderStatus::Shipped->value,  // not allowed for users
             'total_price' => 100,
             'items' => [
                 ['product_id' => $product->id, 'quantity' => 1, 'unit_price' => 100],
@@ -123,7 +124,7 @@ class UpdateOrderControllerTest extends TestCase
         $response = $this->putJson(route('v1.orders.update', $order->id), $payload);
 
         $response->assertStatus(Response::HTTP_BAD_REQUEST);
-        $this->assertDatabaseHas('orders', ['id' => $order->id, 'status' => 'pending']);
+        $this->assertDatabaseHas('orders', ['id' => $order->id, 'status' => OrderStatus::Pending->value]);
     }
 
     public function test_regular_user_cannot_update_other_users_order(): void
@@ -134,7 +135,7 @@ class UpdateOrderControllerTest extends TestCase
 
         $order = OrderModel::factory()->create([
             'user_id' => $other->id,
-            'status' => 'pending',
+            'status' => OrderStatus::Pending->value,
             'total_price' => 100,
         ]);
 
@@ -148,7 +149,7 @@ class UpdateOrderControllerTest extends TestCase
 
         $payload = [
             'id' => $order->id,
-            'status' => 'cancelled',
+            'status' => OrderStatus::Cancelled->value,
             'total_price' => 100,
             'items' => [
                 ['product_id' => $product->id, 'quantity' => 1, 'unit_price' => 100],

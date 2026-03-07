@@ -924,69 +924,98 @@ The transition rules are domain logic — they belong neither in the controller 
                   ┌──────────┐
          ┌────────│  pending  │──────────────────────┐
          │        └──────────┘                        │
-         │ (admin) paid          (admin/user*) cancelled
-         ▼                                            ▼
-    ┌─────────┐                              ┌─────────────┐
-    │  paid   │                              │  cancelled  │ ◄─ terminal
-    └─────────┘                              └─────────────┘
-     │       │
-     │       │ (admin) refunded
-     │       ▼
-     │   ┌──────────┐
-     │   │ refunded │ ◄─ terminal
-     │   └──────────┘
-     │
-     │ (admin) shipped
-     ▼
-┌──────────┐
-│ shipped  │
-└──────────┘
-     │
-     │ (admin) delivered
-     ▼
-┌───────────┐
-│ delivered │
-└───────────┘
-     │
-     │ (admin) refunded
-     ▼
-┌──────────┐
-│ refunded │ ◄─ terminal
-└──────────┘
+         │           │                                │
+         │           │ (webhook) payment_failed       │ (user*/admin) cancelled
+         │           ▼                                │
+         │     ┌─────────────────┐                    │
+         │     │ payment_failed  │────────────────────┤
+         │     └─────────────────┘                    │
+         │           │ (webhook) paid                 │
+         │           │                                │
+         │ (webhook/ ▼                                │
+         │  admin)  ┌─────────┐                       │
+         ├──────────│  paid   │───────────────────────┤ (user*/admin) cancelled
+         │          └─────────┘                       │   → auto-refund
+         │           │       │                        │
+         │           │       │ (admin) refunded       │
+         │           │       ▼                        │
+         │           │   ┌──────────┐                 │
+         │           │   │ refunded │ ◄─ terminal     │
+         │           │   └──────────┘                 │
+         │           │                                │
+         │           │ (admin) processing             │
+         │           ▼                                │
+         │     ┌─────────────┐                        │
+         │     │ processing  │────────────────────────┤ (admin) cancelled
+         │     └─────────────┘                        │   → auto-refund
+         │           │                                │
+         │           │ (webhook/admin) shipped        │
+         │           ▼                                ▼
+         │     ┌──────────┐                  ┌─────────────┐
+         │     │ shipped  │                  │  cancelled  │ ◄─ terminal
+         │     └──────────┘                  └─────────────┘
+         │           │
+         │           │ (webhook/admin) delivered
+         │           ▼
+         │     ┌───────────┐
+         │     │ delivered │
+         │     └───────────┘
+         │           │
+         │           │ (admin/return approved) refunded
+         │           ▼
+         │     ┌──────────┐
+         └────▸│ refunded │ ◄─ terminal
+               └──────────┘
 ```
 
-*`pending → cancelled` is only permitted for regular users within **24 hours** of order creation.
+*User cancellation is only permitted within **24 hours** of order creation.
 
-### Two rule sets, two methods
+### Three rule sets, three methods
 
-The machine exposes two methods with different levels of permission:
+The machine exposes three methods for different actors:
 
 #### `assertUserTransitionAllowed(Order $existing, OrderStatus $newStatus)`
 
-Enforces what a **regular customer** may request. Currently only one transition is permitted:
+Enforces what a **regular customer** may request:
 
 | From | To | Extra condition |
 |------|----|-----------------|
 | `pending` | `cancelled` | Must be within 24 hours of `created_at` |
+| `payment_failed` | `cancelled` | Must be within 24 hours of `created_at` |
+| `paid` | `cancelled` | Must be within 24 hours of `created_at` → auto-refund + stock restored |
 
-Any other transition throws `InvalidOrderStateException` → `400 Bad Request`.
+Any other transition throws `InvalidOrderStateException` → `400 Bad Request`. Once an order reaches `processing`, only admins can cancel it.
 
 #### `assertAdminTransitionAllowed(Order $existing, OrderStatus $newStatus)`
 
-Enforces the **complete lifecycle** for operators. Every valid transition:
+Enforces the **complete lifecycle** for operators:
 
 | From | To |
 |------|----|
 | `pending` | `paid`, `cancelled` |
-| `paid` | `shipped`, `refunded` |
+| `payment_failed` | `paid`, `cancelled` |
+| `paid` | `processing`, `refunded`, `cancelled` |
+| `processing` | `shipped`, `cancelled` |
 | `shipped` | `delivered` |
 | `delivered` | `refunded` |
 | `cancelled` | *(terminal — no outgoing transitions)* |
 | `refunded` | *(terminal — no outgoing transitions)* |
 
-> **Note:** The `pending → paid` transition can happen in two ways: (1) automatically via the external payment provider webhook at `POST /api/v1/webhooks/payments`, which calls `OrderService::markOrderAsPaid()`, or (2) manually by an admin through the standard order update endpoint.
+Cancelling a `paid` or `processing` order triggers auto-refund with stock restoration.
 
-Admins go through the machine too — they are not exempt. This means attempting to skip a step (e.g. `paid → delivered`) or resurrect a terminal order (`cancelled → pending`) throws the same `InvalidOrderStateException`.
+#### `assertWebhookTransitionAllowed(Order $existing, OrderStatus $newStatus)`
+
+Enforces what **external systems** (payment providers, shipping carriers) can trigger via webhooks:
+
+| From | To | Webhook |
+|------|----|---------|
+| `pending` | `paid` | Payment (success) |
+| `pending` | `payment_failed` | Payment (failure) |
+| `payment_failed` | `paid` | Payment (retry success) |
+| `processing` | `shipped` | Shipping (carrier picked up) |
+| `shipped` | `delivered` | Shipping (carrier delivered) |
+
+> **Note:** Webhooks cannot skip steps — a shipping carrier cannot mark an order as `shipped` unless it's in `processing` (admin must start fulfilment first).
 
 ### Class anatomy
 
@@ -997,39 +1026,64 @@ final readonly class OrderStatusMachine implements OrderStatusMachineInterface
     private const CANCELLATION_WINDOW_HOURS = 24;
 
     // Indexed by current status value; value is the list of permitted targets.
-    private const USER_ALLOWED_TRANSITIONS  = [ ... ];
-    private const ADMIN_ALLOWED_TRANSITIONS = [ ... ];
+    private const USER_ALLOWED_TRANSITIONS    = [ ... ];
+    private const ADMIN_ALLOWED_TRANSITIONS   = [ ... ];
+    private const WEBHOOK_ALLOWED_TRANSITIONS = [ ... ];
 
     // ── public API ─────────────────────────────────────────────────────────
     public function assertUserTransitionAllowed(Order $existing, OrderStatus $newStatus): void
     public function assertAdminTransitionAllowed(Order $existing, OrderStatus $newStatus): void
+    public function assertWebhookTransitionAllowed(Order $existing, OrderStatus $newStatus): void
 }
 ```
 
-Both methods throw `InvalidOrderStateException` on violation and return `void` on success — the "tell, don't ask" pattern.
+All three methods throw `InvalidOrderStateException` on violation and return `void` on success — the "tell, don't ask" pattern.
+
+### Cancellation with auto-refund
+
+When an order in `paid` or `processing` status is cancelled (by user or admin), `OrderService` automatically:
+
+1. Restores stock for each order item (within a DB transaction with pessimistic locking)
+2. Records `Return` entries in `inventory_history`
+3. Updates the order status to `cancelled`
+4. Invalidates product caches
+5. Dispatches `OrderCancelledEvent` with `refundIssued: true`
+6. Sends a cancellation email to the customer (with refund notice)
+
+Cancelling a `pending` or `payment_failed` order skips the refund (no payment was made).
 
 ### Integration
 
 ```
 PUT /api/v1/orders/{id}
-
 UpdateOrderController::executeRequest()
-  ├── 1. Auth / ownership check (non-admin users only)
+  ├── 1. Auth / ownership check
   ├── 2. Resolve isAdmin = auth()->user()->isAdmin()
   └── OrderService::updateOrder(id, unpersisted, asAdmin: isAdmin)
-        ├── 3. OrderRepository::findById(id)           ← always fetches existing order
+        ├── 3. OrderRepository::findById(id)
         ├── 4a. if asAdmin  → statusMachine::assertAdminTransitionAllowed(existing, newStatus)
         │   4b. if !asAdmin → statusMachine::assertUserTransitionAllowed(existing, newStatus)
         │         └── also checks 24-hour cancellation window
-        └── 5. OrderRepository::update(id, unpersisted)
-```
+        ├── 5a. if cancelled → cancelOrder() (with auto-refund if paid/processing)
+        └── 5b. otherwise   → OrderRepository::update(id, unpersisted)
 
-`OrderService` always fetches the existing order (step 3) regardless of role — both rule sets need the current status to validate the transition.
+POST /api/v1/webhooks/payments
+PaymentWebhookController::__invoke()
+  └── match status:
+        ├── "paid"           → OrderService::markOrderAsPaid(orderId, paymentRef)
+        └── "payment_failed" → OrderService::markOrderAsPaymentFailed(orderId, paymentRef)
+
+POST /api/v1/webhooks/shipping
+ShippingWebhookController::__invoke()
+  └── match event:
+        ├── "shipped"   → OrderService::markOrderAsShipped(orderId, trackingNumber)
+        └── "delivered"  → OrderService::markOrderAsDelivered(orderId)
+```
 
 ### Adding a new transition
 
 1. Add the new `OrderStatus` case to `app/Enums/OrderStatus.php` if needed.
-2. Add the transition to `ADMIN_ALLOWED_TRANSITIONS` (and `USER_ALLOWED_TRANSITIONS` if customers should also trigger it).
+2. Add the transition to the appropriate constant (`ADMIN_ALLOWED_TRANSITIONS`, `USER_ALLOWED_TRANSITIONS`, or `WEBHOOK_ALLOWED_TRANSITIONS`).
 3. Add a migration if the `status` column type needs updating.
 4. Add a test case to `tests/Unit/Services/OrderStatusMachineTest.php`.
 

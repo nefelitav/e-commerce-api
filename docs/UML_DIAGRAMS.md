@@ -143,7 +143,7 @@ graph TB
     subgraph "Domain Layer"
         models["Eloquent Models"]
         enums["Enums<br/>(OrderStatus, CouponType, ...)"]
-        events["Domain Events<br/>(OrderCreated, OrderPaid, OrderShipped)"]
+        events["Domain Events<br/>(OrderCreated, OrderPaid,<br/>OrderShipped, OrderDelivered,<br/>OrderCancelled)"]
         exceptions["Domain Exceptions"]
     end
 
@@ -159,7 +159,7 @@ graph TB
         redis[("Redis 7")]
         queueWorker["Queue Worker"]
         mailServer["Mail Server"]
-        webhookEndpoint["External Webhook<br/>(Payment Provider)"]
+        webhookEndpoint["External Webhooks<br/>(Payment Provider,<br/>Shipping Carrier)"]
     end
 
     nginx --> middleware
@@ -219,9 +219,11 @@ graph TB
 
     client["Client<br/>(Browser / API Consumer)"]
     paymentProvider["Payment Provider<br/>(External Webhook)"]
+    shippingCarrier["Shipping Carrier<br/>(External Webhook)"]
 
     client -- "HTTP :8081" --> nginxService
     paymentProvider -- "POST /api/v1/webhooks/payments" --> nginxService
+    shippingCarrier -- "POST /api/v1/webhooks/shipping" --> nginxService
     nginxService -- "FastCGI :9000" --> phpFpm
     phpFpm -- "SQL" --> postgresDb
     phpFpm -- "Cache / Queue dispatch" --> redisCache
@@ -251,34 +253,50 @@ graph TB
 stateDiagram-v2
     [*] --> Pending : Order created
 
-    Pending --> Cancelled : User cancels\n(within 24h window)
-    Pending --> Paid : Payment webhook\nor Admin
-    Pending --> Cancelled : Admin cancels
+    Pending --> Paid : Payment webhook (success)
+    Pending --> PaymentFailed : Payment webhook (failure)
+    Pending --> Cancelled : User cancels (within 24h)\nor Admin cancels
 
-    Paid --> Shipped : Admin ships
+    PaymentFailed --> Paid : Payment webhook (retry success)
+    PaymentFailed --> Cancelled : User cancels (within 24h)\nor Admin cancels
+
+    Paid --> Processing : Admin starts fulfilment
+    Paid --> Cancelled : User cancels (within 24h)\nor Admin cancels\n→ auto-refund + stock restored
     Paid --> Refunded : Admin refunds
 
-    Shipped --> Delivered : Admin confirms delivery
+    Processing --> Shipped : Shipping carrier webhook
+    Processing --> Cancelled : Admin cancels\n→ auto-refund + stock restored
 
-    Delivered --> Refunded : Admin refunds
+    Shipped --> Delivered : Shipping carrier webhook
+
+    Delivered --> Refunded : Admin refunds\nor Return request approved\n→ stock restored
 
     Cancelled --> [*]
     Refunded --> [*]
 
     note right of Pending
         Initial state.
-        Users can only cancel (within 24h).
-        Admins can mark as paid or cancel.
+        Awaiting payment from provider.
     end note
 
-    note right of Cancelled
-        Terminal state.
-        No outgoing transitions.
+    note right of PaymentFailed
+        Payment attempt failed.
+        Can retry or cancel.
     end note
 
-    note right of Refunded
+    note right of Processing
+        Warehouse preparing the package.
+        Admin-initiated, carrier ships.
+    end note
+
+    note left of Cancelled
         Terminal state.
-        No outgoing transitions.
+        Auto-refund if previously paid/processing.
+    end note
+
+    note left of Refunded
+        Terminal state.
+        Stock restored to inventory.
     end note
 ```
 
@@ -286,16 +304,30 @@ stateDiagram-v2
 
 | Actor | From | To | Condition |
 |-------|------|----|-----------|
-| User  | `pending` | `cancelled` | Within 24 hours of `created_at` |
-| Admin | `pending` | `paid` | — |
+| Payment webhook | `pending` | `paid` | Successful payment |
+| Payment webhook | `pending` | `payment_failed` | Failed payment |
+| Payment webhook | `payment_failed` | `paid` | Retry succeeds |
+| User | `pending` | `cancelled` | Within 24 hours of `created_at` |
+| User | `payment_failed` | `cancelled` | Within 24 hours of `created_at` |
+| User | `paid` | `cancelled` | Within 24 hours of `created_at` → auto-refund |
+| Admin | `pending` | `paid` | Manual override |
 | Admin | `pending` | `cancelled` | — |
-| Webhook | `pending` | `paid` | Valid payment reference |
-| Admin | `paid` | `shipped` | — |
+| Admin | `payment_failed` | `paid` | Manual override |
+| Admin | `payment_failed` | `cancelled` | — |
+| Admin | `paid` | `processing` | Start fulfilment |
 | Admin | `paid` | `refunded` | — |
-| Admin | `shipped` | `delivered` | — |
+| Admin | `paid` | `cancelled` | → auto-refund + stock restored |
+| Admin | `processing` | `shipped` | Manual override |
+| Admin | `processing` | `cancelled` | → auto-refund + stock restored |
+| Shipping webhook | `processing` | `shipped` | Carrier picked up |
+| Admin | `shipped` | `delivered` | Manual override |
+| Shipping webhook | `shipped` | `delivered` | Carrier delivered |
 | Admin | `delivered` | `refunded` | — |
+| Return approval | `delivered` | `refunded` | Return request approved → stock restored |
 
 > `cancelled` and `refunded` are **terminal states** — no outgoing transitions are allowed.
+> 
+> **Auto-refund**: Cancelling a `paid` or `processing` order automatically restores stock and issues a refund.
 
 ---
 
@@ -355,17 +387,17 @@ sequenceDiagram
 
     Queue->>MailServer: Send confirmation email (async)
 
-    Note over Customer,MailServer: 2. Payment Processing
+    Note over Customer,MailServer: 2. Payment Processing (via webhook)
 
     participant PaymentProvider as Payment Provider
     participant WebhookCtrl as PaymentWebhookController
 
-    PaymentProvider->>Nginx: POST /api/v1/webhooks/payments
+    PaymentProvider->>Nginx: POST /api/v1/webhooks/payments {status: "paid"}
     Nginx->>WebhookCtrl: FastCGI forward
     WebhookCtrl->>WebhookCtrl: Validate (PaymentWebhookRequest)
     WebhookCtrl->>OrderService: markOrderAsPaid(orderId, paymentRef)
     OrderService->>OrderRepo: findById(orderId)
-    OrderService->>OrderService: Assert status == pending
+    OrderService->>OrderService: StatusMachine.assertWebhookTransitionAllowed(pending → paid)
     OrderService->>OrderRepo: update(status: paid)
     OrderRepo->>DB: UPDATE orders SET status = 'paid'
     OrderService->>EventDispatcher: dispatch(OrderPaidEvent)
@@ -377,22 +409,90 @@ sequenceDiagram
 
     Queue->>MailServer: Send payment confirmation email (async)
 
-    Note over Customer,MailServer: 3. Shipping & Delivery
+    Note over Customer,MailServer: 2b. Payment Failure (via webhook)
+
+    PaymentProvider->>Nginx: POST /api/v1/webhooks/payments {status: "payment_failed"}
+    Nginx->>WebhookCtrl: FastCGI forward
+    WebhookCtrl->>OrderService: markOrderAsPaymentFailed(orderId, paymentRef)
+    OrderService->>OrderService: StatusMachine.assertWebhookTransitionAllowed(pending → payment_failed)
+    OrderService->>OrderRepo: update(status: payment_failed)
+    OrderService-->>WebhookCtrl: updated order
+    WebhookCtrl-->>Nginx: 200 OK
+
+    Note over Customer,MailServer: 3. Admin Starts Fulfilment
 
     actor Admin
 
-    Admin->>Nginx: PUT /api/v1/orders/{id} {status: "shipped"}
+    Admin->>Nginx: PUT /api/v1/orders/{id} {status: "processing"}
     Nginx->>Controller: FastCGI forward
-    Controller->>OrderService: updateOrder(id, status: shipped, asAdmin: true)
-    OrderService->>OrderService: StatusMachine.assertAdminTransitionAllowed(paid → shipped)
-    OrderService->>OrderRepo: update(status: shipped)
-    OrderRepo->>DB: UPDATE orders SET status = 'shipped'
-    OrderService->>EventDispatcher: dispatch(OrderShippedEvent)
-    EventDispatcher->>Queue: Push SendOrderShippedEmail job
+    Controller->>OrderService: updateOrder(id, status: processing, asAdmin: true)
+    OrderService->>OrderService: StatusMachine.assertAdminTransitionAllowed(paid → processing)
+    OrderService->>OrderRepo: update(status: processing)
+    OrderRepo->>DB: UPDATE orders SET status = 'processing'
     OrderService-->>Controller: updated order
     Controller-->>Nginx: 200 OK
     Nginx-->>Admin: Response
 
+    Note over Customer,MailServer: 4. Shipping Carrier Webhooks
+
+    participant ShippingCarrier as Shipping Carrier
+    participant ShipCtrl as ShippingWebhookController
+
+    ShippingCarrier->>Nginx: POST /api/v1/webhooks/shipping {event: "shipped"}
+    Nginx->>ShipCtrl: FastCGI forward
+    ShipCtrl->>ShipCtrl: Validate (ShippingWebhookRequest)
+    ShipCtrl->>OrderService: markOrderAsShipped(orderId, trackingNumber)
+    OrderService->>OrderService: StatusMachine.assertWebhookTransitionAllowed(processing → shipped)
+    OrderService->>OrderRepo: update(status: shipped)
+    OrderRepo->>DB: UPDATE orders SET status = 'shipped'
+    OrderService->>EventDispatcher: dispatch(OrderShippedEvent)
+    EventDispatcher->>Queue: Push SendOrderShippedEmail job
+    OrderService-->>ShipCtrl: updated order
+    ShipCtrl-->>Nginx: 200 OK
+    Nginx-->>ShippingCarrier: Response
+
     Queue->>MailServer: Send shipping notification email (async)
+
+    ShippingCarrier->>Nginx: POST /api/v1/webhooks/shipping {event: "delivered"}
+    Nginx->>ShipCtrl: FastCGI forward
+    ShipCtrl->>OrderService: markOrderAsDelivered(orderId)
+    OrderService->>OrderService: StatusMachine.assertWebhookTransitionAllowed(shipped → delivered)
+    OrderService->>OrderRepo: update(status: delivered)
+    OrderRepo->>DB: UPDATE orders SET status = 'delivered'
+    OrderService->>EventDispatcher: dispatch(OrderDeliveredEvent)
+    EventDispatcher->>Queue: Push SendOrderDeliveredEmail job
+    OrderService-->>ShipCtrl: updated order
+    ShipCtrl-->>Nginx: 200 OK
+
+    Queue->>MailServer: Send delivery confirmation email (async)
+
+    Note over Customer,MailServer: 5. Cancellation with Auto-Refund
+
+    Customer->>Nginx: PUT /api/v1/orders/{id} {status: "cancelled"}
+    Nginx->>Controller: FastCGI forward
+    Controller->>OrderService: updateOrder(id, status: cancelled, asAdmin: false)
+    OrderService->>OrderService: StatusMachine.assertUserTransitionAllowed(paid → cancelled)
+    OrderService->>OrderService: assertWithinCancellationWindow()
+
+    rect rgb(255, 235, 235)
+        Note over OrderService,DB: DB Transaction (auto-refund: stock restoration)
+        loop For each order item
+            OrderService->>ProductRepo: findByIdForUpdate(productId)
+            ProductRepo->>DB: SELECT ... FOR UPDATE
+            OrderService->>ProductRepo: update quantity (restore)
+            OrderService->>InventoryRepo: record(Return entry)
+        end
+        OrderService->>OrderRepo: update(status: cancelled)
+        OrderRepo->>DB: UPDATE orders SET status = 'cancelled'
+    end
+
+    OrderService->>Redis: Invalidate product caches
+    OrderService->>EventDispatcher: dispatch(OrderCancelledEvent, refundIssued: true)
+    EventDispatcher->>Queue: Push SendOrderCancelledEmail job
+    OrderService-->>Controller: updated order
+    Controller-->>Nginx: 200 OK
+    Nginx-->>Customer: Response
+
+    Queue->>MailServer: Send cancellation email with refund notice (async)
 ```
 

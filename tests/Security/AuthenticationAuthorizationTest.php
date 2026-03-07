@@ -2,6 +2,7 @@
 
 namespace Tests\Security;
 
+use App\Enums\OrderStatus;
 use App\Models\Order\OrderItemModel;
 use App\Models\Order\OrderModel;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -249,7 +250,7 @@ class AuthenticationAuthorizationTest extends TestCase
         $product = CatalogFixture::product();
         $order = OrderModel::factory()->create([
             'user_id' => $userA->id,
-            'status' => 'pending',
+            'status' => OrderStatus::Pending->value,
         ]);
         OrderItemModel::factory()->create([
             'order_id' => $order->id,
@@ -259,7 +260,7 @@ class AuthenticationAuthorizationTest extends TestCase
         $this->actingAs($userB);
 
         $this->putJson(route('v1.orders.update', $order->id), [
-            'status' => 'cancelled',
+            'status' => OrderStatus::Cancelled->value,
             'total_price' => $order->total_price,
             'items' => [
                 ['product_id' => $product->id, 'quantity' => 1, 'unit_price' => $product->price],

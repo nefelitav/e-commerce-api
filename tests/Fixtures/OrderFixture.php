@@ -2,6 +2,7 @@
 
 namespace Tests\Fixtures;
 
+use App\Enums\OrderStatus;
 use App\Models\Product\ProductModel;
 
 class OrderFixture
@@ -11,10 +12,10 @@ class OrderFixture
      *
      * @return array{status: string, total_price: float, items: array<int, array{product_id: int, quantity: int, unit_price: float}>}
      */
-    public static function payload(ProductModel $product, int $quantity = 1, string $status = 'pending'): array
+    public static function payload(ProductModel $product, int $quantity = 1, ?string $status = null): array
     {
         return [
-            'status' => $status,
+            'status' => $status ?? OrderStatus::Pending->value,
             'total_price' => $product->price * $quantity,
             'items' => [
                 [
@@ -32,7 +33,7 @@ class OrderFixture
      * @param  array<int, array{product: ProductModel, quantity: int, unit_price?: float}>  $items
      * @return array{status: string, total_price: float|int, items: array<int, array{product_id: int, quantity: int, unit_price: float}>}
      */
-    public static function multiItemPayload(array $items, string $status = 'pending'): array
+    public static function multiItemPayload(array $items, ?string $status = null): array
     {
         $orderItems = [];
         $totalPrice = 0;
@@ -51,7 +52,7 @@ class OrderFixture
         }
 
         return [
-            'status' => $status,
+            'status' => $status ?? OrderStatus::Pending->value,
             'total_price' => $totalPrice,
             'items' => $orderItems,
         ];
@@ -62,12 +63,12 @@ class OrderFixture
      *
      * @return array{order_id: int, payment_reference: string, status: string}
      */
-    public static function webhookPayload(int $orderId, string $reference = 'pay_test_001', string $status = 'paid'): array
+    public static function webhookPayload(int $orderId, string $reference = 'pay_test_001', ?string $status = null): array
     {
         return [
             'order_id' => $orderId,
             'payment_reference' => $reference,
-            'status' => $status,
+            'status' => $status ?? OrderStatus::Paid->value,
         ];
     }
 
@@ -81,7 +82,7 @@ class OrderFixture
         $payload = [
             'order_id' => $orderId,
             'payment_reference' => $reference,
-            'status' => 'paid',
+            'status' => OrderStatus::Paid->value,
         ];
 
         $encoded = json_encode($payload, JSON_THROW_ON_ERROR);

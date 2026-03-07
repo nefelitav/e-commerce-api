@@ -211,7 +211,8 @@ Accept: application/json
 | POST | `/return-requests/{id}/approve` | Admin | Approve return request |
 | POST | `/return-requests/{id}/reject` | Admin | Reject return request |
 | **WEBHOOKS** |
-| POST | `/webhooks/payments` | — | Receive payment confirmation (external provider) |
+| POST | `/webhooks/payments` | — | Receive payment status (paid / payment_failed) |
+| POST | `/webhooks/shipping` | — | Receive shipping status (shipped / delivered) |
 
 ---
 
@@ -1352,7 +1353,7 @@ POST /api/v1/webhooks/payments
 
 **Auth:** HMAC-SHA256 signature verification (when `WEBHOOK_SIGNING_SECRET` is configured)
 
-**Description:** Receives a payment confirmation from an external payment provider. Transitions the order from `pending` to `paid` and dispatches an `OrderPaidEvent` which triggers outbound webhooks.
+**Description:** Receives a payment status update from an external payment provider. Transitions the order to `paid` (on success) or `payment_failed` (on failure). A `payment_failed` order can be retried — sending a subsequent `paid` status will transition it to `paid`.
 
 When a signing secret is configured, the payment provider must include an `X-Webhook-Signature` header containing the HMAC-SHA256 hash of the raw request body, signed with the shared secret. Requests with missing or invalid signatures are rejected with `403 Forbidden`.
 
@@ -1374,7 +1375,15 @@ When a signing secret is configured, the payment provider must include an `X-Web
 |-------|------|----------|-------------|
 | `order_id` | integer | ✅ | The order ID (must exist) |
 | `payment_reference` | string | ✅ | External payment reference ID |
-| `status` | string | ✅ | Must be `paid` |
+| `status` | string | ✅ | `paid` or `payment_failed` |
+
+**Allowed transitions:**
+
+| Current status | `status` value | Result |
+|----------------|---------------|--------|
+| `pending` | `paid` | → `paid` |
+| `pending` | `payment_failed` | → `payment_failed` |
+| `payment_failed` | `paid` | → `paid` (retry) |
 
 **Success Response (200 OK):**
 ```json
@@ -1386,14 +1395,80 @@ When a signing secret is configured, the payment provider must include an `X-Web
     "status": "paid",
     "total_price": 299.99,
     "items": [...]
-  }
+  },
+  "message": "Payment processed successfully"
 }
 ```
 
 **Error Responses:**
-- `400 Bad Request` — Order is not in `pending` status or not found
+- `400 Bad Request` — Invalid status transition or order not found
 - `403 Forbidden` — Invalid or missing webhook signature (when signing secret is configured)
 - `422 Unprocessable Entity` — Validation error (missing fields, invalid status, nonexistent order)
+
+### Shipping Status
+
+```
+POST /api/v1/webhooks/shipping
+```
+
+**Auth:** HMAC-SHA256 signature verification (when `WEBHOOK_SIGNING_SECRET` is configured)
+
+**Description:** Receives shipping status updates from an external shipping carrier. Transitions the order to `shipped` (when the carrier picks up the package) or `delivered` (when the carrier confirms delivery).
+
+**Headers:**
+| Header | Required | Description |
+|--------|----------|-------------|
+| `X-Webhook-Signature` | When `WEBHOOK_SIGNING_SECRET` is set | HMAC-SHA256 of request body |
+
+**Request Body (shipped):**
+```json
+{
+  "order_id": 42,
+  "event": "shipped",
+  "tracking_number": "1Z999AA10123456784"
+}
+```
+
+**Request Body (delivered):**
+```json
+{
+  "order_id": 42,
+  "event": "delivered"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `order_id` | integer | ✅ | The order ID (must exist) |
+| `event` | string | ✅ | `shipped` or `delivered` |
+| `tracking_number` | string | Required when `event` is `shipped` | Carrier tracking number |
+
+**Allowed transitions:**
+
+| Current status | `event` value | Result |
+|----------------|--------------|--------|
+| `processing` | `shipped` | → `shipped` |
+| `shipped` | `delivered` | → `delivered` |
+
+**Success Response (200 OK):**
+```json
+{
+  "success": true,
+  "data": {
+    "id": 42,
+    "user_id": 7,
+    "status": "shipped",
+    "total_price": 299.99,
+    "items": [...]
+  },
+  "message": "Order marked as shipped"
+}
+```
+
+**Error Responses:**
+- `400 Bad Request` — Invalid status transition or order not found
+- `403 Forbidden` — Invalid or missing webhook signature
+- `422 Unprocessable Entity` — Validation error
 
 ---
 

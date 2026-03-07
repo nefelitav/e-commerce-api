@@ -30,6 +30,7 @@ use App\Http\Controllers\Api\V1\ReturnRequest\GetReturnRequestController;
 use App\Http\Controllers\Api\V1\ReturnRequest\ListReturnRequestsController;
 use App\Http\Controllers\Api\V1\ReturnRequest\RejectReturnRequestController;
 use App\Http\Controllers\Api\V1\Webhook\PaymentWebhookController;
+use App\Http\Controllers\Api\V1\Webhook\ShippingWebhookController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('api/v1')->group(function () {
@@ -45,6 +46,7 @@ Route::prefix('api/v1')->group(function () {
 
     // Webhooks (external provider callbacks)
     Route::post('webhooks/payments', PaymentWebhookController::class)->name('v1.webhooks.payments');
+    Route::post('webhooks/shipping', ShippingWebhookController::class)->name('v1.webhooks.shipping');
 
     Route::middleware('auth.required')->group(function () {
         // Orders

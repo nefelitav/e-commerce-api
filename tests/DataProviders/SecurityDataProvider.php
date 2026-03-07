@@ -2,6 +2,8 @@
 
 namespace Tests\DataProviders;
 
+use App\Enums\OrderStatus;
+
 /**
  * Reusable data providers for security tests.
  */
@@ -139,9 +141,9 @@ final class SecurityDataProvider
     public static function nonPayableOrderStatuses(): array
     {
         return [
-            'shipped' => ['shipped'],
-            'cancelled' => ['cancelled'],
-            'delivered' => ['delivered'],
+            'shipped' => [OrderStatus::Shipped->value],
+            'cancelled' => [OrderStatus::Cancelled->value],
+            'delivered' => [OrderStatus::Delivered->value],
         ];
     }
 
@@ -151,9 +153,9 @@ final class SecurityDataProvider
     public static function invalidTransitionsFromPending(): array
     {
         return [
-            'pending to shipped' => ['shipped'],
-            'pending to delivered' => ['delivered'],
-            'pending to paid' => ['paid'],
+            'pending to shipped' => [OrderStatus::Shipped->value],
+            'pending to delivered' => [OrderStatus::Delivered->value],
+            'pending to paid' => [OrderStatus::Paid->value],
         ];
     }
 
@@ -163,10 +165,10 @@ final class SecurityDataProvider
     public static function invalidWebhookStatuses(): array
     {
         return [
-            'shipped' => ['shipped'],
-            'delivered' => ['delivered'],
-            'pending' => ['pending'],
-            'cancelled' => ['cancelled'],
+            'shipped' => [OrderStatus::Shipped->value],
+            'delivered' => [OrderStatus::Delivered->value],
+            'pending' => [OrderStatus::Pending->value],
+            'cancelled' => [OrderStatus::Cancelled->value],
             'random' => ['random_status'],
         ];
     }

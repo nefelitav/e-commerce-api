@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1\ReturnRequest;
 
+use App\Enums\ReturnRequestStatus;
 use App\Exceptions\BadRequestException;
 use App\Exceptions\InvalidReturnRequestStateException;
 use App\Exceptions\ReturnRequestNotFoundException;
@@ -42,6 +43,6 @@ final readonly class RejectReturnRequestController extends Controller
         $data = $this->transformer->transform($returnRequest);
         $this->logger->info('Return request rejected.', ['return_request' => $data]);
 
-        return self::success(new ProcessReturnRequestResponse($data, 'rejected'), Response::HTTP_OK);
+        return self::success(new ProcessReturnRequestResponse($data, ReturnRequestStatus::Rejected->value), Response::HTTP_OK);
     }
 }

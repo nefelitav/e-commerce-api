@@ -7,7 +7,9 @@ use App\Dto\Order\Order;
 use App\Dto\Order\UnpersistedOrder;
 use App\Enums\InventoryChangeType;
 use App\Enums\OrderStatus;
+use App\Events\OrderCancelledEvent;
 use App\Events\OrderCreatedEvent;
+use App\Events\OrderDeliveredEvent;
 use App\Events\OrderPaidEvent;
 use App\Events\OrderShippedEvent;
 use App\Exceptions\InsufficientStockException;
@@ -24,18 +26,22 @@ use Illuminate\Support\Facades\DB;
 
 final readonly class OrderService implements OrderServiceInterface
 {
+    private const REFUNDABLE_STATUSES = [
+        OrderStatus::Paid->value,
+        OrderStatus::Processing->value,
+    ];
+
     public function __construct(
         private OrderRepositoryInterface $repository,
         private ProductRepositoryInterface $productRepository,
         private InventoryHistoryRepositoryInterface $inventoryHistoryRepository,
         private OrderStatusMachineInterface $statusMachine,
         private AuditLogger $auditLogger,
-    ) {
-    }
+    ) {}
 
     /**
-     * @param array<string, mixed> $filters
-     * @param array<string> $includes
+     * @param  array<string, mixed>  $filters
+     * @param  array<string>  $includes
      * @return LengthAwarePaginator<int, Order>
      */
     public function listOrders(
@@ -44,7 +50,7 @@ final readonly class OrderService implements OrderServiceInterface
         string $sort = 'id',
         string $order = 'asc',
         array $filters = [],
-        array $includes = []
+        array $includes = [],
     ): LengthAwarePaginator {
         return $this->repository->getAll($page, $perPage, $sort, $order, $filters, $includes);
     }
@@ -94,7 +100,7 @@ final readonly class OrderService implements OrderServiceInterface
                 }
 
                 return $this->repository->persist($unpersistedOrder);
-            }
+            },
         );
 
         foreach ($unpersistedOrder->items as $item) {
@@ -125,20 +131,9 @@ final readonly class OrderService implements OrderServiceInterface
             throw new OrderNotFoundException($orderId);
         }
 
-        if ($existing->status !== OrderStatus::Pending) {
-            throw new InvalidOrderStateException(
-                "Cannot mark order as paid: current status is '{$existing->status->value}', expected 'pending'."
-            );
-        }
+        $this->statusMachine->assertWebhookTransitionAllowed($existing, OrderStatus::Paid);
 
-        $unpersisted = new UnpersistedOrder(
-            userId: $existing->userId,
-            status: OrderStatus::Paid,
-            totalPrice: $existing->totalPrice,
-            items: [],
-        );
-
-        $updated = $this->repository->update($orderId, $unpersisted);
+        $updated = $this->updateStatus($orderId, $existing, OrderStatus::Paid);
 
         $this->auditLogger->log('order.paid', 'order', $orderId, [
             'payment_reference' => $paymentReference,
@@ -147,6 +142,81 @@ final readonly class OrderService implements OrderServiceInterface
         ]);
 
         OrderPaidEvent::dispatch($updated, now()->toIso8601String());
+
+        return $updated;
+    }
+
+    /**
+     * @throws OrderNotFoundException
+     * @throws InvalidOrderStateException
+     */
+    public function markOrderAsPaymentFailed(int $orderId, string $paymentReference): Order
+    {
+        $existing = $this->repository->findById($orderId);
+
+        if ($existing === null) {
+            throw new OrderNotFoundException($orderId);
+        }
+
+        $this->statusMachine->assertWebhookTransitionAllowed($existing, OrderStatus::PaymentFailed);
+
+        $updated = $this->updateStatus($orderId, $existing, OrderStatus::PaymentFailed);
+
+        $this->auditLogger->log('order.payment_failed', 'order', $orderId, [
+            'payment_reference' => $paymentReference,
+            'previous_status' => $existing->status->value,
+        ]);
+
+        return $updated;
+    }
+
+    /**
+     * @throws OrderNotFoundException
+     * @throws InvalidOrderStateException
+     */
+    public function markOrderAsShipped(int $orderId, string $trackingNumber): Order
+    {
+        $existing = $this->repository->findById($orderId);
+
+        if ($existing === null) {
+            throw new OrderNotFoundException($orderId);
+        }
+
+        $this->statusMachine->assertWebhookTransitionAllowed($existing, OrderStatus::Shipped);
+
+        $updated = $this->updateStatus($orderId, $existing, OrderStatus::Shipped);
+
+        $this->auditLogger->log('order.shipped', 'order', $orderId, [
+            'tracking_number' => $trackingNumber,
+            'previous_status' => $existing->status->value,
+        ]);
+
+        OrderShippedEvent::dispatch($updated);
+
+        return $updated;
+    }
+
+    /**
+     * @throws OrderNotFoundException
+     * @throws InvalidOrderStateException
+     */
+    public function markOrderAsDelivered(int $orderId): Order
+    {
+        $existing = $this->repository->findById($orderId);
+
+        if ($existing === null) {
+            throw new OrderNotFoundException($orderId);
+        }
+
+        $this->statusMachine->assertWebhookTransitionAllowed($existing, OrderStatus::Delivered);
+
+        $updated = $this->updateStatus($orderId, $existing, OrderStatus::Delivered);
+
+        $this->auditLogger->log('order.delivered', 'order', $orderId, [
+            'previous_status' => $existing->status->value,
+        ]);
+
+        OrderDeliveredEvent::dispatch($updated);
 
         return $updated;
     }
@@ -169,6 +239,10 @@ final readonly class OrderService implements OrderServiceInterface
             $this->statusMachine->assertUserTransitionAllowed($existing, $unpersistedOrder->status);
         }
 
+        if ($unpersistedOrder->status === OrderStatus::Cancelled) {
+            return $this->cancelOrder($id, $existing, $asAdmin);
+        }
+
         $updated = $this->repository->update($id, $unpersistedOrder);
 
         $this->auditLogger->log('order.updated', 'order', $id, [
@@ -180,6 +254,10 @@ final readonly class OrderService implements OrderServiceInterface
 
         if ($unpersistedOrder->status === OrderStatus::Shipped) {
             OrderShippedEvent::dispatch($updated);
+        }
+
+        if ($unpersistedOrder->status === OrderStatus::Delivered) {
+            OrderDeliveredEvent::dispatch($updated);
         }
 
         return $updated;
@@ -229,5 +307,67 @@ final readonly class OrderService implements OrderServiceInterface
         ]);
 
         return true;
+    }
+
+    private function cancelOrder(int $id, Order $existing, bool $asAdmin): Order
+    {
+        $refundIssued = in_array($existing->status->value, self::REFUNDABLE_STATUSES, true);
+
+        /** @var Order $updated */
+        $updated = DB::transaction(function () use ($id, $existing, $refundIssued) {
+            if ($refundIssued) {
+                $this->restoreStock($existing);
+            }
+
+            return $this->updateStatus($id, $existing, OrderStatus::Cancelled);
+        });
+
+        if ($refundIssued) {
+            Cache::tags(['products'])->flush();
+        }
+
+        $this->auditLogger->log('order.cancelled', 'order', $id, [
+            'previous_status' => $existing->status->value,
+            'refund_issued' => $refundIssued,
+            'as_admin' => $asAdmin,
+        ]);
+
+        OrderCancelledEvent::dispatch($updated, $refundIssued);
+
+        return $updated;
+    }
+
+    private function restoreStock(Order $order): void
+    {
+        foreach ($order->items as $item) {
+            $productModel = $this->productRepository->findByIdForUpdate($item->productId);
+
+            if ($productModel !== null) {
+                $previousQuantity = $productModel->quantity;
+                $newQuantity = $previousQuantity + $item->quantity;
+
+                $productModel->update(['quantity' => $newQuantity]);
+
+                $this->inventoryHistoryRepository->record(new UnpersistedInventoryHistoryEntry(
+                    productId: $item->productId,
+                    changeType: InventoryChangeType::Return,
+                    quantityChanged: $item->quantity,
+                    previousQuantity: $previousQuantity,
+                    newQuantity: $newQuantity,
+                ));
+            }
+        }
+    }
+
+    private function updateStatus(int $orderId, Order $existing, OrderStatus $newStatus): Order
+    {
+        $unpersisted = new UnpersistedOrder(
+            userId: $existing->userId,
+            status: $newStatus,
+            totalPrice: $existing->totalPrice,
+            items: [],
+        );
+
+        return $this->repository->update($orderId, $unpersisted);
     }
 }

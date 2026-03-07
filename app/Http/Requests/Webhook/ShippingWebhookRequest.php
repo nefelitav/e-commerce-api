@@ -6,7 +6,7 @@ use App\Enums\OrderStatus;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
-final class PaymentWebhookRequest extends FormRequest
+final class ShippingWebhookRequest extends FormRequest
 {
     public function authorize(): bool
     {
@@ -36,8 +36,8 @@ final class PaymentWebhookRequest extends FormRequest
     {
         return [
             'order_id' => ['required', 'integer', 'exists:orders,id'],
-            'payment_reference' => ['required', 'string', 'max:255'],
-            'status' => ['required', 'string', Rule::in([OrderStatus::Paid->value, OrderStatus::PaymentFailed->value])],
+            'event' => ['required', 'string', Rule::in([OrderStatus::Shipped->value, OrderStatus::Delivered->value])],
+            'tracking_number' => ['required_if:event,'.OrderStatus::Shipped->value, 'nullable', 'string', 'max:255'],
         ];
     }
 }

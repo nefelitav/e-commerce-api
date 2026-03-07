@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Controllers\Order;
 
+use App\Enums\InventoryChangeType;
 use App\Models\Order\OrderItemModel;
 use App\Models\Order\OrderModel;
 use App\Models\Product\ProductModel;
@@ -59,7 +60,7 @@ class DeleteOrderControllerTest extends TestCase
 
         $this->assertDatabaseHas('inventory_history', [
             'product_id' => $product->id,
-            'change_type' => 'return',
+            'change_type' => InventoryChangeType::Return->value,
             'quantity_changed' => 3,
             'previous_quantity' => 7,
             'new_quantity' => 10,
@@ -76,4 +77,3 @@ class DeleteOrderControllerTest extends TestCase
         $response->assertStatus(Response::HTTP_UNPROCESSABLE_ENTITY);
     }
 }
-

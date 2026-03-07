@@ -2,6 +2,8 @@
 
 namespace Tests\E2E;
 
+use App\Enums\InventoryChangeType;
+use App\Enums\OrderStatus;
 use App\Events\OrderCreatedEvent;
 use App\Events\OrderPaidEvent;
 use App\Events\OrderShippedEvent;
@@ -98,54 +100,65 @@ class FullOrderLifecycleTest extends TestCase
         // Step 7: Verify inventory history was recorded
         $this->assertDatabaseHas('inventory_history', [
             'product_id' => $productOneId,
-            'change_type' => 'sale',
+            'change_type' => InventoryChangeType::Sale->value,
             'quantity_changed' => -2,
         ]);
         $this->assertDatabaseHas('inventory_history', [
             'product_id' => $productTwoId,
-            'change_type' => 'sale',
+            'change_type' => InventoryChangeType::Sale->value,
             'quantity_changed' => -3,
         ]);
 
         // Step 8: Customer views order
         $this->getJson(route('v1.orders.show', $orderId))
             ->assertStatus(Response::HTTP_OK)
-            ->assertJsonFragment(['status' => 'pending']);
+            ->assertJsonFragment(['status' => OrderStatus::Pending->value]);
 
         // Step 9: Payment webhook marks order as paid
         $this->payOrderViaWebhook($orderId, 'pay_test_123')
             ->assertStatus(Response::HTTP_OK);
 
         Event::assertDispatched(OrderPaidEvent::class);
-        $this->assertDatabaseHas('orders', ['id' => $orderId, 'status' => 'paid']);
+        $this->assertDatabaseHas('orders', ['id' => $orderId, 'status' => OrderStatus::Paid->value]);
 
-        // Step 10: Admin ships the order
+        // Step 10: Admin starts fulfilment (paid → processing)
         $this->actingAs($admin);
 
         $this->putJson(route('v1.orders.update', $orderId), [
-            'status' => 'shipped',
+            'status' => OrderStatus::Processing->value,
             'total_price' => $totalPrice,
             'items' => [
                 ['product_id' => $productOneId, 'quantity' => 2, 'unit_price' => 199.99],
                 ['product_id' => $productTwoId, 'quantity' => 3, 'unit_price' => 14.99],
             ],
         ])->assertStatus(Response::HTTP_OK)
-            ->assertJsonFragment(['status' => 'shipped']);
+            ->assertJsonFragment(['status' => OrderStatus::Processing->value]);
+
+        // Step 11: Admin ships the order (processing → shipped)
+        $this->putJson(route('v1.orders.update', $orderId), [
+            'status' => OrderStatus::Shipped->value,
+            'total_price' => $totalPrice,
+            'items' => [
+                ['product_id' => $productOneId, 'quantity' => 2, 'unit_price' => 199.99],
+                ['product_id' => $productTwoId, 'quantity' => 3, 'unit_price' => 14.99],
+            ],
+        ])->assertStatus(Response::HTTP_OK)
+            ->assertJsonFragment(['status' => OrderStatus::Shipped->value]);
 
         Event::assertDispatched(OrderShippedEvent::class);
 
-        // Step 11: Admin marks order as delivered
+        // Step 12: Admin marks order as delivered (shipped → delivered)
         $this->putJson(route('v1.orders.update', $orderId), [
-            'status' => 'delivered',
+            'status' => OrderStatus::Delivered->value,
             'total_price' => $totalPrice,
             'items' => [
                 ['product_id' => $productOneId, 'quantity' => 2, 'unit_price' => 199.99],
                 ['product_id' => $productTwoId, 'quantity' => 3, 'unit_price' => 14.99],
             ],
         ])->assertStatus(Response::HTTP_OK)
-            ->assertJsonFragment(['status' => 'delivered']);
+            ->assertJsonFragment(['status' => OrderStatus::Delivered->value]);
 
-        $this->assertDatabaseHas('orders', ['id' => $orderId, 'status' => 'delivered']);
+        $this->assertDatabaseHas('orders', ['id' => $orderId, 'status' => OrderStatus::Delivered->value]);
     }
 
     public function test_customer_cancels_pending_order_and_stock_is_restored_on_delete(): void
@@ -166,9 +179,9 @@ class FullOrderLifecycleTest extends TestCase
         $this->assertDatabaseHas('products', ['id' => $product->id, 'quantity' => 9]);
 
         // Customer cancels the order
-        $this->updateOrderStatus($orderId, 'cancelled', $product)
+        $this->updateOrderStatus($orderId, OrderStatus::Cancelled->value, $product)
             ->assertStatus(Response::HTTP_OK)
-            ->assertJsonFragment(['status' => 'cancelled']);
+            ->assertJsonFragment(['status' => OrderStatus::Cancelled->value]);
 
         // Admin deletes the cancelled order; stock is restored
         $this->actingAs($admin);
@@ -178,7 +191,7 @@ class FullOrderLifecycleTest extends TestCase
         $this->assertDatabaseHas('products', ['id' => $product->id, 'quantity' => 10]);
         $this->assertDatabaseHas('inventory_history', [
             'product_id' => $product->id,
-            'change_type' => 'return',
+            'change_type' => InventoryChangeType::Return->value,
         ]);
     }
 

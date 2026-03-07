@@ -2,6 +2,7 @@
 
 namespace Tests\Security;
 
+use App\Enums\OrderStatus;
 use App\Models\Order\OrderModel;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\DataProviderExternal;
@@ -26,7 +27,7 @@ class OrderStateSecurityTest extends TestCase
         $product = CatalogFixture::productWithStock(10);
 
         $response = $this->postJson(route('v1.orders.store'), [
-            'status' => 'paid',
+            'status' => OrderStatus::Paid->value,
             'total_price' => $product->price,
             'items' => [
                 ['product_id' => $product->id, 'quantity' => 1, 'unit_price' => $product->price],
@@ -48,7 +49,7 @@ class OrderStateSecurityTest extends TestCase
 
         $response = $this->postJson(
             route('v1.orders.store'),
-            OrderFixture::payload($product, 1, 'shipped'),
+            OrderFixture::payload($product, 1, OrderStatus::Shipped->value),
         );
 
         $this->assertContains(
@@ -66,7 +67,7 @@ class OrderStateSecurityTest extends TestCase
 
         $response = $this->postJson(
             route('v1.orders.store'),
-            OrderFixture::payload($product, 1, 'delivered'),
+            OrderFixture::payload($product, 1, OrderStatus::Delivered->value),
         );
 
         $this->assertContains(
@@ -89,7 +90,7 @@ class OrderStateSecurityTest extends TestCase
         $this->updateOrderStatus($orderId, $targetStatus, $product)
             ->assertStatus(Response::HTTP_BAD_REQUEST);
 
-        $this->assertDatabaseHas('orders', ['id' => $orderId, 'status' => 'pending']);
+        $this->assertDatabaseHas('orders', ['id' => $orderId, 'status' => OrderStatus::Pending->value]);
     }
 
     public function test_user_cannot_transition_cancelled_to_any_status(): void
@@ -99,11 +100,11 @@ class OrderStateSecurityTest extends TestCase
         $this->actingAs($customer);
 
         // First cancel the order
-        $this->updateOrderStatus($orderId, 'cancelled', $product)
+        $this->updateOrderStatus($orderId, OrderStatus::Cancelled->value, $product)
             ->assertStatus(Response::HTTP_OK);
 
         // Try to revert cancelled to pending
-        $this->updateOrderStatus($orderId, 'pending', $product)
+        $this->updateOrderStatus($orderId, OrderStatus::Pending->value, $product)
             ->assertStatus(Response::HTTP_BAD_REQUEST);
     }
 

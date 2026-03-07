@@ -13,8 +13,8 @@ use Illuminate\Pagination\LengthAwarePaginator;
 interface OrderServiceInterface
 {
     /**
-     * @param array<string, mixed> $filters
-     * @param array<string> $includes
+     * @param  array<string, mixed>  $filters
+     * @param  array<string>  $includes
      * @return LengthAwarePaginator<int, Order>
      */
     public function listOrders(
@@ -23,7 +23,7 @@ interface OrderServiceInterface
         string $sort = 'id',
         string $order = 'asc',
         array $filters = [],
-        array $includes = []
+        array $includes = [],
     ): LengthAwarePaginator;
 
     public function getOrderById(int $id): ?Order;
@@ -44,6 +44,24 @@ interface OrderServiceInterface
      * @throws OrderNotFoundException
      * @throws InvalidOrderStateException
      */
+    public function markOrderAsPaymentFailed(int $orderId, string $paymentReference): Order;
+
+    /**
+     * @throws OrderNotFoundException
+     * @throws InvalidOrderStateException
+     */
+    public function markOrderAsShipped(int $orderId, string $trackingNumber): Order;
+
+    /**
+     * @throws OrderNotFoundException
+     * @throws InvalidOrderStateException
+     */
+    public function markOrderAsDelivered(int $orderId): Order;
+
+    /**
+     * @throws OrderNotFoundException
+     * @throws InvalidOrderStateException
+     */
     public function updateOrder(int $id, UnpersistedOrder $unpersistedOrder, bool $asAdmin = false): Order;
 
     /**
@@ -51,4 +69,3 @@ interface OrderServiceInterface
      */
     public function deleteOrder(int $id): bool;
 }
-

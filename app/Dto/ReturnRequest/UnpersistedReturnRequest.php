@@ -2,6 +2,8 @@
 
 namespace App\Dto\ReturnRequest;
 
+use App\Enums\ReturnRequestStatus;
+
 final readonly class UnpersistedReturnRequest
 {
     public function __construct(
@@ -19,7 +21,7 @@ final readonly class UnpersistedReturnRequest
             'order_id' => $this->orderId,
             'user_id' => $this->userId,
             'reason' => $this->reason,
-            'status' => 'pending',
+            'status' => ReturnRequestStatus::Pending->value,
         ];
     }
 }

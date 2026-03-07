@@ -19,7 +19,7 @@ class InventoryHistoryRepositoryTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->repository = new InventoryHistoryRepository();
+        $this->repository = new InventoryHistoryRepository;
     }
 
     public function test_it_lists_entries_by_product_id(): void
@@ -53,11 +53,10 @@ class InventoryHistoryRepositoryTest extends TestCase
         $this->assertDatabaseHas('inventory_history', [
             'id' => $result->id,
             'product_id' => $product->id,
-            'change_type' => 'adjustment',
+            'change_type' => InventoryChangeType::Adjustment->value,
             'quantity_changed' => 5,
             'previous_quantity' => 10,
             'new_quantity' => 15,
         ]);
     }
 }
-

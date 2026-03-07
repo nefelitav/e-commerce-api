@@ -2,6 +2,8 @@
 
 namespace Tests\Feature\Controllers\Order;
 
+use App\Enums\InventoryChangeType;
+use App\Enums\OrderStatus;
 use App\Models\Product\ProductModel;
 use App\Models\UserModel;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -29,7 +31,7 @@ class CreateOrderControllerTest extends TestCase
         ]);
 
         $payload = [
-            'status' => 'pending',
+            'status' => OrderStatus::Pending->value,
             'total_price' => 1999,
             'items' => [
                 [
@@ -60,7 +62,7 @@ class CreateOrderControllerTest extends TestCase
         $this->assertDatabaseHas('orders', [
             'id' => $orderId,
             'user_id' => $user->id,
-            'status' => 'pending',
+            'status' => OrderStatus::Pending->value,
             'total_price' => 1999,
         ]);
 
@@ -83,7 +85,7 @@ class CreateOrderControllerTest extends TestCase
         ]);
 
         $payload = [
-            'status' => 'pending',
+            'status' => OrderStatus::Pending->value,
             'total_price' => 1500,
             'items' => [
                 [
@@ -104,7 +106,7 @@ class CreateOrderControllerTest extends TestCase
 
         $this->assertDatabaseHas('inventory_history', [
             'product_id' => $product->id,
-            'change_type' => 'sale',
+            'change_type' => InventoryChangeType::Sale->value,
             'previous_quantity' => 8,
             'new_quantity' => 5,
             'quantity_changed' => -3,
@@ -122,7 +124,7 @@ class CreateOrderControllerTest extends TestCase
         ]);
 
         $payload = [
-            'status' => 'pending',
+            'status' => OrderStatus::Pending->value,
             'total_price' => 2500,
             'items' => [
                 [
@@ -160,4 +162,3 @@ class CreateOrderControllerTest extends TestCase
         $response->assertJsonValidationErrors('status');
     }
 }
-
