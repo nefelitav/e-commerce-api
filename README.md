@@ -1,4 +1,4 @@
-# Shop API
+# E-commerce API
 
 A comprehensive RESTful API for e-commerce built with **Laravel 12**, **PHP 8.2+**, **PostgreSQL 16**, **Redis 7**, **Nginx**, and **Docker**.
 
