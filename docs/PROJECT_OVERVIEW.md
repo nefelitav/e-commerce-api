@@ -4,10 +4,6 @@
 
 **Shop API** is a RESTful API built with Laravel 12 that provides a comprehensive e-commerce backend system. It manages products, categories, orders, inventory, coupons, and returns with advanced filtering, sorting, and pagination capabilities.
 
-> **Quick start** → see [README.md](../README.md)
-> **Full setup instructions** → see [SETUP_AND_DEVELOPMENT.md](./SETUP_AND_DEVELOPMENT.md)
-> **Architecture & design patterns** → see [ARCHITECTURE.md](./ARCHITECTURE.md)
-
 ---
 
 ## Technology Stack
