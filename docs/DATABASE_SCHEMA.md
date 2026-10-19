@@ -63,9 +63,9 @@ updated_at          timestamp     DEFAULT NULL          Last update timestamp
 Column Name    Type          Constraints        Description
 ────────────────────────────────────────────────────────────
 id             bigint        PK, Auto-inc       Category ID
-name           string        NOT NULL           Category name
+name           string        UNIQUE, NOT NULL   Category name
 description    text          Nullable           Category description
-parent_id      bigint        FK, Nullable       Parent category (cascade delete)
+parent_id      bigint        FK, Nullable, indexed  Parent category (cascade delete)
 created_at     timestamp     DEFAULT NULL       Creation timestamp
 updated_at     timestamp     DEFAULT NULL       Last update timestamp
 ```
@@ -94,7 +94,8 @@ name           string         NOT NULL, UNIQUE   Product name
 description    text           Nullable           Product description
 price          decimal(10,2)  NOT NULL           Product price
 quantity       integer        NOT NULL           Stock quantity
-category_id    bigint         FK, NOT NULL       Category reference
+category_id    bigint         FK, NOT NULL, indexed  Category reference
+version        integer        NOT NULL, DEFAULT 1  Optimistic-lock counter, +1 on every change
 created_at     timestamp      DEFAULT NULL       Creation timestamp
 updated_at     timestamp      DEFAULT NULL       Last update timestamp
 ```
@@ -110,11 +111,13 @@ updated_at     timestamp      DEFAULT NULL       Last update timestamp
 Column Name    Type          Constraints        Description
 ────────────────────────────────────────────────────────────
 id             bigint        PK, Auto-inc       Order ID
-user_id        bigint        FK, NOT NULL       User reference
+user_id        bigint        FK, NOT NULL       User reference (covered by the user_id + idempotency_key index)
 status         string        NOT NULL           Order status
 total_price    decimal(10,2) NOT NULL           Total order price
 coupon_id      bigint        FK, Nullable       Applied coupon reference
 discount_amount decimal(10,2) NOT NULL, DEFAULT 0  Discount amount applied
+idempotency_key string       Nullable           Client `Idempotency-Key`; UNIQUE with user_id
+stock_restored_at timestamp  Nullable           Set once the order's stock was given back (never twice)
 created_at     timestamp     DEFAULT NULL       Creation timestamp
 updated_at     timestamp     DEFAULT NULL       Last update timestamp
 ```
@@ -160,7 +163,7 @@ Column Name        Type          Constraints        Description
 ──────────────────────────────────────────────────────────────────
 id                 bigint        PK, Auto-inc       History ID
 product_id         bigint        FK, NOT NULL       Product reference
-change_type        enum          NOT NULL, indexed   Type of change (backed by InventoryChangeType enum)
+change_type        enum          NOT NULL           Type of change (backed by InventoryChangeType enum)
 quantity_changed   integer       NOT NULL           Change amount (negative for deductions)
 previous_quantity  integer       NOT NULL           Stock before change
 new_quantity       integer       NOT NULL           Stock after change
@@ -214,8 +217,8 @@ updated_at        timestamp      DEFAULT NULL       Last update timestamp
 Column Name    Type          Constraints        Description
 ────────────────────────────────────────────────────────────
 id             bigint        PK, Auto-inc       Request ID
-order_id       bigint        FK, NOT NULL       Order reference (cascade delete)
-user_id        bigint        FK, NOT NULL       User who submitted (cascade delete)
+order_id       bigint        FK, NOT NULL, indexed  Order reference (cascade delete)
+user_id        bigint        FK, NOT NULL, indexed  User who submitted (cascade delete)
 reason         text          NOT NULL           Reason for return
 status         string        NOT NULL, indexed  Request status
 admin_notes    text          Nullable           Admin response notes
@@ -228,6 +231,25 @@ updated_at     timestamp     DEFAULT NULL       Last update timestamp
 - `approved` - Return approved, order refunded, stock restored
 - `returning` - Return approved, awaiting item to be received back
 - `rejected` - Return request denied
+
+---
+
+## Constraints & Indexes
+
+Uniqueness is enforced by the database; services rely on it instead of check-then-insert (a lost race surfaces as a `UniqueConstraintViolationException`, mapped to the matching "already exists" error).
+
+| Table | Index / constraint | Purpose |
+|-------|--------------------|---------|
+| users | `email` UNIQUE | Login identity |
+| categories | `name` UNIQUE, `parent_id` | Unique names; subcategory lookups and cascade delete |
+| products | `name` UNIQUE, `category_id` | Unique names; category filter |
+| orders | `(user_id, idempotency_key)` UNIQUE, `status` | Safe order-creation retries (and per-user lookups); status filter |
+| order_items | `order_id`, `product_id` | Load items; cascade; FK |
+| inventory_history | `product_id` | History per product |
+| return_requests | `order_id` UNIQUE where `status <> 'rejected'` (partial), `order_id`, `user_id`, `status` | One active request per order (a rejected one can be followed by a new one); customer list; cascade |
+| coupons | `code` UNIQUE | Redeem lookup; unique codes |
+
+Not indexed on purpose: `LIKE '%x%'` filters (a btree cannot serve them; consider `pg_trgm` once the catalog is large), price/quantity ranges, and low-cardinality columns such as `users.role`.
 
 ---
 
@@ -291,7 +313,7 @@ orders.coupon_id → coupons.id
 
 #### Order → Return Request
 ```
-One order can have one return request
+One order can have at most one active (non-rejected) return request
 orders.id → return_requests.order_id
 ```
 

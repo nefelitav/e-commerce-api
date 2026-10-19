@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1\Category;
 
 use App\Dto\Category\UnpersistedCategory;
 use App\Exceptions\BadRequestException;
+use App\Exceptions\CategoryAlreadyExistsException;
 use App\Exceptions\CategoryNotFoundException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Category\UpdateCategoryRequest;
@@ -23,8 +24,7 @@ final readonly class UpdateCategoryController extends Controller
         private CategoryService $service,
         private CategoryTransformer $transformer,
         private Logger $logger,
-    ) {
-    }
+    ) {}
 
     public function update(UpdateCategoryRequest $request): JsonResponse
     {
@@ -41,12 +41,12 @@ final readonly class UpdateCategoryController extends Controller
             $unpersistedCategory = UnpersistedCategory::fromArray($validatedData);
 
             $updatedCategory = $this->service->updateCategory($validatedData['id'], $unpersistedCategory);
-        } catch (CategoryNotFoundException $e) {
+        } catch (CategoryNotFoundException|CategoryAlreadyExistsException $e) {
             throw new BadRequestException($e);
         }
 
         $updatedCategoryData = $this->transformer->transform($updatedCategory);
-        $this->logger->info("Category updated successfully.", ["category" => $updatedCategoryData]);
+        $this->logger->info('Category updated successfully.', ['category' => $updatedCategoryData]);
 
         return new UpdateCategoryResponse($updatedCategoryData);
     }

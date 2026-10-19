@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1\Product;
 
 use App\Dto\Product\UnpersistedProduct;
 use App\Exceptions\BadRequestException;
+use App\Exceptions\ProductAlreadyExistsException;
 use App\Exceptions\ProductNotFoundException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Product\UpdateProductRequest;
@@ -20,11 +21,10 @@ final readonly class UpdateProductController extends Controller
     use ApiResponse;
 
     public function __construct(
-        private ProductService      $service,
+        private ProductService $service,
         private ProductTransformer $transformer,
-        private Logger              $logger,
-    ) {
-    }
+        private Logger $logger,
+    ) {}
 
     public function update(UpdateProductRequest $request): JsonResponse
     {
@@ -41,12 +41,12 @@ final readonly class UpdateProductController extends Controller
             $unpersistedProduct = UnpersistedProduct::fromArray($validatedData);
 
             $updatedProduct = $this->service->updateProduct($validatedData['id'], $unpersistedProduct);
-        } catch (ProductNotFoundException $e) {
+        } catch (ProductNotFoundException|ProductAlreadyExistsException $e) {
             throw new BadRequestException($e);
         }
 
         $updatedProductData = $this->transformer->transform($updatedProduct);
-        $this->logger->info("Product updated successfully.", ["product" => $updatedProductData]);
+        $this->logger->info('Product updated successfully.', ['product' => $updatedProductData]);
 
         return new UpdateProductResponse($updatedProductData);
     }

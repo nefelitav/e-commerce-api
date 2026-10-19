@@ -45,6 +45,16 @@ final readonly class OrderStatusMachine implements OrderStatusMachineInterface
     ];
 
     /**
+     * Statuses in which cancelling the order refunds the customer.
+     *
+     * @var list<OrderStatus>
+     */
+    private const REFUNDABLE_STATUSES = [
+        OrderStatus::Paid,
+        OrderStatus::Processing,
+    ];
+
+    /**
      * Statuses in which a return request may be created or approved.
      *
      * @var list<OrderStatus>
@@ -111,6 +121,11 @@ final readonly class OrderStatusMachine implements OrderStatusMachineInterface
                 "Webhook transition from '{$existing->status->value}' to '{$newStatus->value}' is not allowed.",
             );
         }
+    }
+
+    public function isRefundable(Order $order): bool
+    {
+        return in_array($order->status, self::REFUNDABLE_STATUSES, strict: true);
     }
 
     /**

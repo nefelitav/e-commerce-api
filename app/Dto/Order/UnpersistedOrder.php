@@ -20,6 +20,20 @@ final readonly class UnpersistedOrder
         public ?string $idempotencyKey = null,
     ) {}
 
+    public function withCoupon(int $couponId, float $discountAmount): self
+    {
+        return new self(
+            userId: $this->userId,
+            status: $this->status,
+            totalPrice: $this->totalPrice,
+            items: $this->items,
+            couponCode: $this->couponCode,
+            couponId: $couponId,
+            discountAmount: $discountAmount,
+            idempotencyKey: $this->idempotencyKey,
+        );
+    }
+
     /**
      * @return array<string, mixed>
      */

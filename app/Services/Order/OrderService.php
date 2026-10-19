@@ -4,7 +4,9 @@ namespace App\Services\Order;
 
 use App\Dto\InventoryHistory\UnpersistedInventoryHistoryEntry;
 use App\Dto\Order\Order;
+use App\Dto\Order\OrderItem;
 use App\Dto\Order\UnpersistedOrder;
+use App\Dto\Order\UnpersistedOrderItem;
 use App\Enums\InventoryChangeType;
 use App\Enums\OrderStatus;
 use App\Events\OrderCancelledEvent;
@@ -30,11 +32,6 @@ use Illuminate\Support\Facades\DB;
 
 final readonly class OrderService implements OrderServiceInterface
 {
-    private const REFUNDABLE_STATUSES = [
-        OrderStatus::Paid->value,
-        OrderStatus::Processing->value,
-    ];
-
     public function __construct(
         private OrderRepositoryInterface $repository,
         private ProductRepositoryInterface $productRepository,
@@ -67,75 +64,20 @@ final readonly class OrderService implements OrderServiceInterface
 
     public function createOrder(UnpersistedOrder $unpersistedOrder): Order
     {
-        $idempotencyKey = $unpersistedOrder->idempotencyKey;
-
-        if ($idempotencyKey !== null) {
-            $replayed = $this->repository->findByIdempotencyKey($unpersistedOrder->userId, $idempotencyKey);
-
-            if ($replayed !== null) {
-                return $replayed;
-            }
+        if (($replayed = $this->findReplay($unpersistedOrder)) !== null) {
+            return $replayed;
         }
 
         try {
             /** @var Order $order */
-            $order = DB::transaction(
-                /**
-                 * @throws ProductNotFoundException
-                 * @throws InsufficientStockException
-                 * @throws CouponNotFoundException
-                 * @throws InvalidCouponException
-                 */
-                function () use ($unpersistedOrder) {
-                    // Lock products in a stable (id) order so two orders containing the
-                    // same products in a different sequence cannot deadlock each other.
-                    $lockOrder = $unpersistedOrder->items;
-                    usort($lockOrder, static fn ($a, $b) => $a->productId <=> $b->productId);
+            $order = DB::transaction(function () use ($unpersistedOrder) {
+                $this->adjustStock($unpersistedOrder->items, deduct: true);
 
-                    foreach ($lockOrder as $item) {
-                        $productModel = $this->productRepository->findByIdForUpdate($item->productId);
-
-                        if ($productModel === null) {
-                            throw new ProductNotFoundException($item->productId);
-                        }
-
-                        $previousQuantity = $productModel->quantity;
-
-                        if ($previousQuantity < $item->quantity) {
-                            throw new InsufficientStockException(
-                                $item->productId,
-                                $item->quantity,
-                                $previousQuantity,
-                            );
-                        }
-
-                        $newQuantity = $previousQuantity - $item->quantity;
-
-                        $productModel->update(['quantity' => $newQuantity]);
-
-                        $this->inventoryHistoryRepository->record(new UnpersistedInventoryHistoryEntry(
-                            productId: $item->productId,
-                            changeType: InventoryChangeType::Sale,
-                            quantityChanged: -$item->quantity,
-                            previousQuantity: $previousQuantity,
-                            newQuantity: $newQuantity,
-                        ));
-                    }
-
-                    return $this->repository->persist($this->withRedeemedCoupon($unpersistedOrder));
-                },
-            );
+                return $this->repository->persist($this->withRedeemedCoupon($unpersistedOrder));
+            });
         } catch (UniqueConstraintViolationException $e) {
             // A concurrent retry with the same Idempotency-Key committed first: return its order.
-            if ($idempotencyKey !== null) {
-                $replayed = $this->repository->findByIdempotencyKey($unpersistedOrder->userId, $idempotencyKey);
-
-                if ($replayed !== null) {
-                    return $replayed;
-                }
-            }
-
-            throw $e;
+            return $this->findReplay($unpersistedOrder) ?? throw $e;
         }
 
         Cache::tags(['products'])->flush();
@@ -157,17 +99,7 @@ final readonly class OrderService implements OrderServiceInterface
      */
     public function markOrderAsPaid(int $orderId, string $paymentReference): Order
     {
-        /** @var array{0: Order, 1: Order} $result */
-        $result = DB::transaction(function () use ($orderId) {
-            // Lock + re-check inside the transaction so duplicate / racing webhooks
-            // cannot both pass the state machine.
-            $existing = $this->lockOrder($orderId);
-
-            $this->statusMachine->assertWebhookTransitionAllowed($existing, OrderStatus::Paid);
-
-            return [$existing, $this->updateStatus($orderId, $existing, OrderStatus::Paid)];
-        });
-        [$existing, $updated] = $result;
+        [$existing, $updated] = $this->transitionViaWebhook($orderId, OrderStatus::Paid);
 
         $this->auditLogger->log('order.paid', 'order', $orderId, [
             'payment_reference' => $paymentReference,
@@ -186,17 +118,7 @@ final readonly class OrderService implements OrderServiceInterface
      */
     public function markOrderAsPaymentFailed(int $orderId, string $paymentReference): Order
     {
-        /** @var array{0: Order, 1: Order} $result */
-        $result = DB::transaction(function () use ($orderId) {
-            // Lock + re-check inside the transaction so duplicate / racing webhooks
-            // cannot both pass the state machine.
-            $existing = $this->lockOrder($orderId);
-
-            $this->statusMachine->assertWebhookTransitionAllowed($existing, OrderStatus::PaymentFailed);
-
-            return [$existing, $this->updateStatus($orderId, $existing, OrderStatus::PaymentFailed)];
-        });
-        [$existing, $updated] = $result;
+        [$existing, $updated] = $this->transitionViaWebhook($orderId, OrderStatus::PaymentFailed);
 
         $this->auditLogger->log('order.payment_failed', 'order', $orderId, [
             'payment_reference' => $paymentReference,
@@ -212,17 +134,7 @@ final readonly class OrderService implements OrderServiceInterface
      */
     public function markOrderAsShipped(int $orderId, string $trackingNumber): Order
     {
-        /** @var array{0: Order, 1: Order} $result */
-        $result = DB::transaction(function () use ($orderId) {
-            // Lock + re-check inside the transaction so duplicate / racing webhooks
-            // cannot both pass the state machine.
-            $existing = $this->lockOrder($orderId);
-
-            $this->statusMachine->assertWebhookTransitionAllowed($existing, OrderStatus::Shipped);
-
-            return [$existing, $this->updateStatus($orderId, $existing, OrderStatus::Shipped)];
-        });
-        [$existing, $updated] = $result;
+        [$existing, $updated] = $this->transitionViaWebhook($orderId, OrderStatus::Shipped);
 
         $this->auditLogger->log('order.shipped', 'order', $orderId, [
             'tracking_number' => $trackingNumber,
@@ -240,17 +152,7 @@ final readonly class OrderService implements OrderServiceInterface
      */
     public function markOrderAsDelivered(int $orderId): Order
     {
-        /** @var array{0: Order, 1: Order} $result */
-        $result = DB::transaction(function () use ($orderId) {
-            // Lock + re-check inside the transaction so duplicate / racing webhooks
-            // cannot both pass the state machine.
-            $existing = $this->lockOrder($orderId);
-
-            $this->statusMachine->assertWebhookTransitionAllowed($existing, OrderStatus::Delivered);
-
-            return [$existing, $this->updateStatus($orderId, $existing, OrderStatus::Delivered)];
-        });
-        [$existing, $updated] = $result;
+        [$existing, $updated] = $this->transitionViaWebhook($orderId, OrderStatus::Delivered);
 
         $this->auditLogger->log('order.delivered', 'order', $orderId, [
             'previous_status' => $existing->status->value,
@@ -267,68 +169,9 @@ final readonly class OrderService implements OrderServiceInterface
      */
     public function updateOrder(int $id, UnpersistedOrder $unpersistedOrder, bool $asAdmin = false): Order
     {
-        /** @var array{0: Order, 1: Order, 2: bool} $result */
-        $result = DB::transaction(function () use ($id, $unpersistedOrder, $asAdmin) {
-            // Lock + validate inside the transaction: two concurrent updates (e.g. a double
-            // cancel) must not both see the old status and both restore stock.
-            $existing = $this->lockOrder($id);
-
-            if ($asAdmin) {
-                $this->statusMachine->assertAdminTransitionAllowed($existing, $unpersistedOrder->status);
-            } else {
-                $this->statusMachine->assertUserTransitionAllowed($existing, $unpersistedOrder->status);
-            }
-
-            if ($unpersistedOrder->status === OrderStatus::Cancelled) {
-                $refundIssued = in_array($existing->status->value, self::REFUNDABLE_STATUSES, true);
-
-                if ($refundIssued) {
-                    $this->restoreStock($existing);
-                }
-
-                if ($existing->couponId !== null) {
-                    $this->couponService->releaseCoupon($existing->couponId);
-                }
-
-                return [$existing, $this->updateStatus($id, $existing, OrderStatus::Cancelled), $refundIssued];
-            }
-
-            return [$existing, $this->repository->update($id, $unpersistedOrder), false];
-        });
-        [$existing, $updated, $refundIssued] = $result;
-
-        if ($unpersistedOrder->status === OrderStatus::Cancelled) {
-            if ($refundIssued) {
-                Cache::tags(['products'])->flush();
-            }
-
-            $this->auditLogger->log('order.cancelled', 'order', $id, [
-                'previous_status' => $existing->status->value,
-                'refund_issued' => $refundIssued,
-                'as_admin' => $asAdmin,
-            ]);
-
-            OrderCancelledEvent::dispatch($updated, $refundIssued);
-
-            return $updated;
-        }
-
-        $this->auditLogger->log('order.updated', 'order', $id, [
-            'previous_status' => $existing->status,
-            'new_status' => $unpersistedOrder->status,
-            'total_price' => $unpersistedOrder->totalPrice,
-            'as_admin' => $asAdmin,
-        ]);
-
-        if ($unpersistedOrder->status === OrderStatus::Shipped) {
-            OrderShippedEvent::dispatch($updated);
-        }
-
-        if ($unpersistedOrder->status === OrderStatus::Delivered) {
-            OrderDeliveredEvent::dispatch($updated);
-        }
-
-        return $updated;
+        return $unpersistedOrder->status === OrderStatus::Cancelled
+            ? $this->cancelOrder($id, $asAdmin)
+            : $this->applyUpdate($id, $unpersistedOrder, $asAdmin);
     }
 
     /**
@@ -342,6 +185,7 @@ final readonly class OrderService implements OrderServiceInterface
 
             $this->restoreStock($order);
 
+            // A cancelled order already released its coupon use.
             if ($order->couponId !== null && $order->status !== OrderStatus::Cancelled) {
                 $this->couponService->releaseCoupon($order->couponId);
             }
@@ -362,16 +206,136 @@ final readonly class OrderService implements OrderServiceInterface
 
     /**
      * @throws OrderNotFoundException
+     * @throws InvalidOrderStateException
+     */
+    private function cancelOrder(int $id, bool $asAdmin): Order
+    {
+        /** @var array{0: Order, 1: Order, 2: bool} $result */
+        $result = DB::transaction(function () use ($id, $asAdmin) {
+            $existing = $this->lockAndAssertTransition($id, OrderStatus::Cancelled, $asAdmin);
+
+            $refundIssued = $this->statusMachine->isRefundable($existing);
+
+            if ($refundIssued) {
+                $this->restoreStock($existing);
+            }
+
+            if ($existing->couponId !== null) {
+                $this->couponService->releaseCoupon($existing->couponId);
+            }
+
+            return [$existing, $this->updateStatus($id, $existing, OrderStatus::Cancelled), $refundIssued];
+        });
+        [$existing, $updated, $refundIssued] = $result;
+
+        if ($refundIssued) {
+            Cache::tags(['products'])->flush();
+        }
+
+        $this->auditLogger->log('order.cancelled', 'order', $id, [
+            'previous_status' => $existing->status->value,
+            'refund_issued' => $refundIssued,
+            'as_admin' => $asAdmin,
+        ]);
+
+        OrderCancelledEvent::dispatch($updated, $refundIssued);
+
+        return $updated;
+    }
+
+    /**
+     * @throws OrderNotFoundException
+     * @throws InvalidOrderStateException
+     */
+    private function applyUpdate(int $id, UnpersistedOrder $unpersistedOrder, bool $asAdmin): Order
+    {
+        /** @var array{0: Order, 1: Order} $result */
+        $result = DB::transaction(function () use ($id, $unpersistedOrder, $asAdmin) {
+            $existing = $this->lockAndAssertTransition($id, $unpersistedOrder->status, $asAdmin);
+
+            return [$existing, $this->repository->update($id, $unpersistedOrder)];
+        });
+        [$existing, $updated] = $result;
+
+        $this->auditLogger->log('order.updated', 'order', $id, [
+            'previous_status' => $existing->status,
+            'new_status' => $unpersistedOrder->status,
+            'total_price' => $unpersistedOrder->totalPrice,
+            'as_admin' => $asAdmin,
+        ]);
+
+        match ($unpersistedOrder->status) {
+            OrderStatus::Shipped => OrderShippedEvent::dispatch($updated),
+            OrderStatus::Delivered => OrderDeliveredEvent::dispatch($updated),
+            default => null,
+        };
+
+        return $updated;
+    }
+
+    /**
+     * Lock the order, then re-check the webhook transition inside the transaction so duplicate
+     * or racing webhooks cannot both pass the state machine.
+     *
+     * @return array{0: Order, 1: Order} the order before and after the transition
+     *
+     * @throws OrderNotFoundException
+     * @throws InvalidOrderStateException
+     */
+    private function transitionViaWebhook(int $orderId, OrderStatus $to): array
+    {
+        /** @var array{0: Order, 1: Order} $result */
+        $result = DB::transaction(function () use ($orderId, $to) {
+            $existing = $this->lockOrder($orderId);
+
+            $this->statusMachine->assertWebhookTransitionAllowed($existing, $to);
+
+            return [$existing, $this->updateStatus($orderId, $existing, $to)];
+        });
+
+        return $result;
+    }
+
+    /**
+     * Must run inside a transaction: two concurrent updates (e.g. a double cancel) must not
+     * both see the old status.
+     *
+     * @throws OrderNotFoundException
+     * @throws InvalidOrderStateException
+     */
+    private function lockAndAssertTransition(int $id, OrderStatus $to, bool $asAdmin): Order
+    {
+        $existing = $this->lockOrder($id);
+
+        if ($asAdmin) {
+            $this->statusMachine->assertAdminTransitionAllowed($existing, $to);
+        } else {
+            $this->statusMachine->assertUserTransitionAllowed($existing, $to);
+        }
+
+        return $existing;
+    }
+
+    /**
+     * @throws OrderNotFoundException
      */
     private function lockOrder(int $id): Order
     {
-        $order = $this->repository->findByIdForUpdate($id);
+        return $this->repository->findByIdForUpdate($id) ?? throw new OrderNotFoundException($id);
+    }
 
-        if ($order === null) {
-            throw new OrderNotFoundException($id);
+    /**
+     * Reads shared state, so repeated calls can differ (a concurrent request may commit in between).
+     *
+     * @phpstan-impure
+     */
+    private function findReplay(UnpersistedOrder $order): ?Order
+    {
+        if ($order->idempotencyKey === null) {
+            return null;
         }
 
-        return $order;
+        return $this->repository->findByIdempotencyKey($order->userId, $order->idempotencyKey);
     }
 
     /**
@@ -388,16 +352,7 @@ final readonly class OrderService implements OrderServiceInterface
 
         $coupon = $this->couponService->redeemCoupon($order->couponCode, $order->totalPrice);
 
-        return new UnpersistedOrder(
-            userId: $order->userId,
-            status: $order->status,
-            totalPrice: $order->totalPrice,
-            items: $order->items,
-            couponCode: $order->couponCode,
-            couponId: $coupon->id,
-            discountAmount: $this->couponService->calculateDiscount($coupon, $order->totalPrice),
-            idempotencyKey: $order->idempotencyKey,
-        );
+        return $order->withCoupon($coupon->id, $this->couponService->calculateDiscount($coupon, $order->totalPrice));
     }
 
     private function restoreStock(Order $order): void
@@ -406,41 +361,64 @@ final readonly class OrderService implements OrderServiceInterface
             return;
         }
 
-        // Stable (product id) lock order, same as order creation, to avoid deadlocks.
-        $items = $order->items;
+        $this->adjustStock($order->items, deduct: false);
+
+        $this->repository->markStockRestored($order->id);
+    }
+
+    /**
+     * Take (sale) or give back (return) stock for each item, recording inventory history.
+     * Must run inside a transaction.
+     *
+     * @param  array<int, UnpersistedOrderItem|OrderItem>  $items
+     *
+     * @throws ProductNotFoundException
+     * @throws InsufficientStockException
+     */
+    private function adjustStock(array $items, bool $deduct): void
+    {
+        // Lock products in a stable (id) order so two orders containing the same products
+        // in a different sequence cannot deadlock each other.
         usort($items, static fn ($a, $b) => $a->productId <=> $b->productId);
 
         foreach ($items as $item) {
             $productModel = $this->productRepository->findByIdForUpdate($item->productId);
 
-            if ($productModel !== null) {
-                $previousQuantity = $productModel->quantity;
-                $newQuantity = $previousQuantity + $item->quantity;
+            if ($productModel === null) {
+                if ($deduct) {
+                    throw new ProductNotFoundException($item->productId);
+                }
 
-                $productModel->update(['quantity' => $newQuantity]);
-
-                $this->inventoryHistoryRepository->record(new UnpersistedInventoryHistoryEntry(
-                    productId: $item->productId,
-                    changeType: InventoryChangeType::Return,
-                    quantityChanged: $item->quantity,
-                    previousQuantity: $previousQuantity,
-                    newQuantity: $newQuantity,
-                ));
+                // Product was deleted since the sale: nothing to give the stock back to.
+                continue;
             }
-        }
 
-        $this->repository->markStockRestored($order->id);
+            $previousQuantity = $productModel->quantity;
+            $newQuantity = $deduct ? $previousQuantity - $item->quantity : $previousQuantity + $item->quantity;
+
+            if ($newQuantity < 0) {
+                throw new InsufficientStockException($item->productId, $item->quantity, $previousQuantity);
+            }
+
+            $productModel->update(['quantity' => $newQuantity]);
+
+            $this->inventoryHistoryRepository->record(new UnpersistedInventoryHistoryEntry(
+                productId: $item->productId,
+                changeType: $deduct ? InventoryChangeType::Sale : InventoryChangeType::Return,
+                quantityChanged: $newQuantity - $previousQuantity,
+                previousQuantity: $previousQuantity,
+                newQuantity: $newQuantity,
+            ));
+        }
     }
 
     private function updateStatus(int $orderId, Order $existing, OrderStatus $newStatus): Order
     {
-        $unpersisted = new UnpersistedOrder(
+        return $this->repository->update($orderId, new UnpersistedOrder(
             userId: $existing->userId,
             status: $newStatus,
             totalPrice: $existing->totalPrice,
             items: [],
-        );
-
-        return $this->repository->update($orderId, $unpersisted);
+        ));
     }
 }

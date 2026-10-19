@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1\Coupon;
 use App\Dto\Coupon\UnpersistedCoupon;
 use App\Exceptions\BadRequestException;
 use App\Exceptions\CouponNotFoundException;
+use App\Exceptions\InvalidCouponException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Coupon\UpdateCouponRequest;
 use App\Http\Responses\ApiResponse;
@@ -34,7 +35,7 @@ final readonly class UpdateCouponController extends Controller
 
         try {
             $coupon = $this->service->updateCoupon((int) $validated['id'], $unpersisted);
-        } catch (CouponNotFoundException $e) {
+        } catch (CouponNotFoundException|InvalidCouponException $e) {
             throw new BadRequestException($e);
         }
 

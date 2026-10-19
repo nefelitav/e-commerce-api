@@ -31,6 +31,7 @@ interface CouponServiceInterface
 
     /**
      * @throws CouponNotFoundException
+     * @throws InvalidCouponException
      */
     public function updateCoupon(int $id, UnpersistedCoupon $coupon): Coupon;
 

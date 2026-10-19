@@ -44,6 +44,7 @@ classDiagram
         +string description
         +float price
         +int quantity
+        +int version
         +datetime created_at
         +datetime updated_at
     }
@@ -55,6 +56,8 @@ classDiagram
         +OrderStatus status
         +float total_price
         +float discount_amount
+        +string idempotency_key
+        +datetime stock_restored_at
         +datetime created_at
         +datetime updated_at
     }
@@ -109,7 +112,7 @@ classDiagram
     User "1" --> "0..*" ReturnRequest : submits
     Order "1" --> "1..*" OrderItem : contains
     Order "0..*" --> "0..1" Coupon : applies
-    Order "1" --> "0..*" ReturnRequest : has
+    Order "1" --> "0..1" ReturnRequest : has (non-rejected)
     OrderItem "0..*" --> "1" Product : references
     Product "1" --> "0..*" InventoryHistory : tracks
     Product "0..*" --> "1" Category : belongs to
@@ -346,6 +349,7 @@ sequenceDiagram
     participant InventoryRepo as InventoryHistoryRepository
     participant DB as PostgreSQL
     participant Redis
+    participant CouponService
     participant EventDispatcher as Event Dispatcher
     participant Queue as Queue Worker
     participant MailServer as Mail Server
@@ -396,10 +400,14 @@ sequenceDiagram
     Nginx->>WebhookCtrl: FastCGI forward
     WebhookCtrl->>WebhookCtrl: Validate (PaymentWebhookRequest)
     WebhookCtrl->>OrderService: markOrderAsPaid(orderId, paymentRef)
-    OrderService->>OrderRepo: findById(orderId)
-    OrderService->>OrderService: StatusMachine.assertWebhookTransitionAllowed(pending → paid)
-    OrderService->>OrderRepo: update(status: paid)
-    OrderRepo->>DB: UPDATE orders SET status = 'paid'
+    rect rgb(230, 240, 255)
+        Note over OrderService,DB: DB Transaction (row lock — a duplicate/racing webhook cannot also pass this check)
+        OrderService->>OrderRepo: findByIdForUpdate(orderId)
+        OrderRepo->>DB: SELECT ... FOR UPDATE
+        OrderService->>OrderService: StatusMachine.assertWebhookTransitionAllowed(pending → paid)
+        OrderService->>OrderRepo: update(status: paid)
+        OrderRepo->>DB: UPDATE orders SET status = 'paid'
+    end
     OrderService->>EventDispatcher: dispatch(OrderPaidEvent)
     EventDispatcher->>Queue: Push SendOrderPaidEmail job
     EventDispatcher->>Queue: Push SendOrderPaidWebhook job
@@ -471,17 +479,22 @@ sequenceDiagram
     Customer->>Nginx: PUT /api/v1/orders/{id} {status: "cancelled"}
     Nginx->>Controller: FastCGI forward
     Controller->>OrderService: updateOrder(id, status: cancelled, asAdmin: false)
-    OrderService->>OrderService: StatusMachine.assertUserTransitionAllowed(paid → cancelled)
-    OrderService->>OrderService: assertWithinCancellationWindow()
 
     rect rgb(255, 235, 235)
-        Note over OrderService,DB: DB Transaction (auto-refund: stock restoration)
-        loop For each order item
+        Note over OrderService,DB: DB Transaction — order row locked first, so a second<br/>concurrent cancel (or webhook) cannot also see "paid" and also refund
+        OrderService->>OrderRepo: findByIdForUpdate(id)
+        OrderRepo->>DB: SELECT ... FOR UPDATE
+        OrderService->>OrderService: StatusMachine.assertUserTransitionAllowed(paid → cancelled)
+        OrderService->>OrderService: assertWithinCancellationWindow()
+        OrderService->>OrderService: StatusMachine.isRefundable(paid) → true
+        loop For each order item (locked in product-id order)
             OrderService->>ProductRepo: findByIdForUpdate(productId)
             ProductRepo->>DB: SELECT ... FOR UPDATE
             OrderService->>ProductRepo: update quantity (restore)
             OrderService->>InventoryRepo: record(Return entry)
         end
+        OrderService->>OrderRepo: markStockRestored(id)
+        OrderService->>CouponService: releaseCoupon(couponId) (if one was applied)
         OrderService->>OrderRepo: update(status: cancelled)
         OrderRepo->>DB: UPDATE orders SET status = 'cancelled'
     end

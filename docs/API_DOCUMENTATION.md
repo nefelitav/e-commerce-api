@@ -27,7 +27,7 @@ http://localhost:8000/api/v1/
 
 ### Authentication
 
-The API uses Laravel's session/token-based authentication. Requests are authenticated by passing a valid session cookie or Bearer token issued at login.
+Requests are authenticated via `$request->user()`; there is no `/login` endpoint or session cookie in this codebase — see `app/Http/Middleware/RequireAuth.php` and `RequireAdmin.php` for how a request is resolved to a user in your environment.
 
 ```
 Authorization: Bearer <token>
@@ -185,7 +185,7 @@ Accept: application/json
 | POST | `/products` | Admin | Create product |
 | PUT | `/products/{id}` | Admin | Update product |
 | DELETE | `/products/{id}` | Admin | Delete product |
-| GET | `/products/{id}/inventory-history` | Admin | Product inventory history |
+| GET | `/products/{id}/inventory-history` | Admin | Product inventory history (paginated) |
 | **CATEGORIES** |
 | GET | `/categories` | — | List all categories |
 | GET | `/categories/{id}` | — | Get single category |
@@ -196,7 +196,7 @@ Accept: application/json
 | **ORDERS** |
 | GET | `/orders` | User / Admin | List orders (users see own only) |
 | GET | `/orders/{id}` | User / Admin | Get order (users see own only) |
-| POST | `/orders` | User / Admin | Place order |
+| POST | `/orders` | User / Admin | Place order (optional `coupon_code`, `Idempotency-Key` header) |
 | PUT | `/orders/{id}` | User / Admin | Update order (users: restricted transitions) |
 | DELETE | `/orders/{id}` | Admin | Delete order |
 | **COUPONS** |
@@ -429,6 +429,49 @@ DELETE /api/v1/products/{id}
 
 ---
 
+### Product Inventory History
+```
+GET /api/v1/products/{id}/inventory-history
+```
+
+**Auth:** Admin only
+
+**Description:** Lists stock-movement entries for a product, oldest first. Paginated — a busy product can accumulate unbounded history.
+
+**Query Parameters:**
+```
+page=N          (optional, default: 1)
+per_page=N      (optional, default: 100, max: 100)
+```
+
+**Example Response:**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": 1,
+      "product_id": 5,
+      "change_type": "addition",
+      "quantity_changed": 100,
+      "previous_quantity": 0,
+      "new_quantity": 100
+    }
+  ],
+  "meta": {
+    "current_page": 1,
+    "per_page": 100,
+    "total": 1,
+    "last_page": 1
+  },
+  "message": "Inventory history found"
+}
+```
+
+**Status Code:** `200 OK`
+
+---
+
 ## Categories Endpoints
 
 ### List All Categories
@@ -649,7 +692,7 @@ POST /api/v1/orders
 - `items.*.quantity` — Required, integer, min: 1, max: 10000
 - `items.*.unit_price` — Required, numeric, min: 0
 
-**Inventory:** Placing an order atomically deducts stock using pessimistic locking. If any product has insufficient stock, the entire transaction is rolled back. See [ARCHITECTURE.md — Order Placement & Inventory](./ARCHITECTURE.md#order-placement--inventory) for details.
+**Inventory:** Placing an order atomically deducts stock using pessimistic locking (products locked in a stable order, so two orders can never deadlock each other). If any product has insufficient stock, the entire transaction is rolled back. See [ARCHITECTURE.md — Order Placement & Inventory](./ARCHITECTURE.md#order-placement--inventory) for details, including coupons and idempotent retries.
 
 **Status Code:** `201 Created`
 
@@ -680,6 +723,8 @@ All status transitions are validated by `OrderStatusMachine`. See [ARCHITECTURE.
 **Regular users** may only cancel within 24 hours of creation (from `pending`, `payment_failed`, or `paid`).
 
 **Admins** may perform any valid lifecycle transition. `cancelled` and `refunded` are terminal states.
+
+Cancelling a `paid` or `processing` order issues a refund (stock restored, coupon use released if one was applied); cancelling from any other allowed status does not.
 
 Invalid transitions throw `InvalidOrderStateException` → `400 Bad Request`.
 
@@ -726,6 +771,8 @@ DELETE /api/v1/orders/{id}
 ```
 
 **Auth:** Admin only
+
+**Inventory:** Stock is restored for each item, unless it was already restored by a prior cancellation or an approved return (never twice). `order_items` and any `return_requests` for the order are removed via cascade delete.
 
 **Status Code:** `204 No Content`
 
@@ -884,7 +931,7 @@ POST /api/v1/return-requests
 
 **Auth:** User or Admin (required)
 
-**Description:** Creates a return/refund request for an order. The order must be in `paid`, `shipped`, or `delivered` status. Only one pending/approved return request can exist per order.
+**Description:** Creates a return/refund request for an order. The order must be in `paid`, `shipped`, or `delivered` status (`OrderStatusMachine::assertReturnAllowed`) and have no other non-rejected return request. Both conditions are re-checked when the request is approved, since the order's state can change in between (e.g. it was cancelled after the request was filed).
 
 **Request Body:**
 ```json
@@ -918,7 +965,7 @@ POST /api/v1/return-requests
 **Status Code:** `201 Created`
 
 **Error Responses:**
-- `400 Bad Request` — Order not found, invalid order status, or return request already exists
+- `400 Bad Request` — Order not found, order not in an eligible status, or an active return request already exists for this order
 
 ---
 
@@ -983,7 +1030,7 @@ POST /api/v1/return-requests/{id}/approve
 **Status Code:** `200 OK`
 
 **Error Responses:**
-- `400 Bad Request` — Return request not found or not in `pending` status
+- `400 Bad Request` — Return request not found, not in `pending` status, or the order is no longer in a status eligible for return (e.g. it was cancelled after the request was filed)
 
 ---
 
@@ -1019,6 +1066,7 @@ POST /api/v1/return-requests/{id}/reject
 | 200 | OK | Successfully retrieved/updated resource |
 | 201 | Created | Resource created successfully |
 | 204 | No Content | Resource deleted successfully (products, categories, orders) |
+| 409 | Conflict | Duplicate name/code, a lost optimistic-lock race (`version`), or any other unique-constraint race |
 | 400 | Bad Request | Business rule violation (e.g. insufficient stock, invalid order transition) |
 | 401 | Unauthorized | Request is not authenticated |
 | 403 | Forbidden | Authenticated but insufficient role |
@@ -1055,6 +1103,15 @@ POST /api/v1/return-requests/{id}/reject
     "filter.min_price": ["The min price must be numeric"],
     "sort": ["The selected sort is invalid"]
   }
+}
+```
+
+**Conflict (409)** — duplicate name/code, or a stale `version` on `PUT /products/{id}`:
+```json
+{
+  "success": false,
+  "message": "Product with name Widget already exists.",
+  "error": "Conflict"
 }
 ```
 

@@ -24,6 +24,11 @@ interface OrderStatusMachineInterface
     public function assertWebhookTransitionAllowed(Order $existing, OrderStatus $newStatus): void;
 
     /**
+     * Whether cancelling the order refunds the customer (and so gives the stock back).
+     */
+    public function isRefundable(Order $order): bool;
+
+    /**
      * Whether the order is in a state that can have a return request (created or approved).
      *
      * @throws InvalidOrderStateException

@@ -61,6 +61,7 @@ final readonly class CouponService implements CouponServiceInterface
 
     /**
      * @throws CouponNotFoundException
+     * @throws InvalidCouponException
      */
     public function updateCoupon(int $id, UnpersistedCoupon $coupon): Coupon
     {

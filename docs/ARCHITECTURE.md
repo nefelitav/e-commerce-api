@@ -12,7 +12,6 @@
 9. [Webhooks](#webhooks)
 10. [Email Notifications](#email-notifications)
 11. [Error Handling](#error-handling)
-12. [Extension Points](#extension-points)
 
 ---
 
@@ -136,9 +135,30 @@ routes/api.php
 
 ## Order Placement & Inventory
 
-### Pessimistic locking
+### Concurrency model
 
-`ProductRepository::findByIdForUpdate` issues a `SELECT … FOR UPDATE` lock. This serialises concurrent `POST /orders` requests for the same product, eliminating the race condition where two requests both read the same available quantity and both believe they can fulfil the order.
+Every read-decide-write path takes a row lock (`SELECT … FOR UPDATE`) and re-checks its precondition **inside the transaction**, so concurrent requests cannot both act on stale state:
+
+| Path | Lock | What it prevents |
+|------|------|------------------|
+| `POST /orders` | product rows | Overselling |
+| Cancel / delete order, webhooks (`paid`, `payment_failed`, `shipped`, `delivered`) | order row | Double stock restore; duplicate webhooks both passing the state machine |
+| Approve / reject return request | return-request row (then order row) | Two admins both restoring stock |
+| `PUT /products/{id}` | product row | Concurrent edits; see optimistic locking below |
+
+**Deadlock avoidance:** product rows are always locked in ascending id order (`OrderService::adjustStock`), regardless of the order of items in the request.
+
+**Restore-once guarantee:** `orders.stock_restored_at` is set the first time an order's stock is given back (cancel, delete or approved return). `restoreStock()` is a no-op afterwards, so no combination of those paths can restore twice.
+
+**Optimistic locking (products):** `products.version` increases on every change (including stock movements from orders). `PUT /products/{id}` accepts the `version` the client last read and answers `409 Conflict` if it is stale, so an admin's edit cannot silently overwrite a sale. Omitting `version` skips the check.
+
+**Idempotent order creation:** an optional `Idempotency-Key` header is stored in `orders.idempotency_key` (unique per user). A retry returns the original order instead of creating a second one; a concurrent retry that loses the race hits the unique index and also returns the original.
+
+**Unique constraints as the source of truth:** category/product names, coupon codes and one-active-return-request-per-order are enforced by unique indexes. Services catch `UniqueConstraintViolationException` and raise the matching exception instead of pre-checking. A global handler in `bootstrap/app.php` turns any other unique violation into `409` without exposing SQL.
+
+### Coupons
+
+`POST /orders` accepts an optional `coupon_code`. Inside the order transaction the coupon is validated and one use is consumed with a single conditional `UPDATE … WHERE times_used < max_uses`, so `max_uses` cannot be exceeded under concurrency. The coupon id and discount are stored on the order (`coupon_id`, `discount_amount`). Cancelling or deleting the order releases the use.
 
 ### Inventory history
 
@@ -149,18 +169,17 @@ Every stock movement is recorded in `inventory_history`. The `change_type` colum
 | Product created | `addition` | `+initialQty` |
 | Admin adjusts quantity | `adjustment` | `±delta` |
 | Order placed | `sale` | `-orderedQty` |
-| Order deleted | `return` | `+restoredQty` |
+| Order cancelled (paid/processing), deleted, or return approved | `return` | `+restoredQty` |
 
 ### Order deletion and inventory restoration
 
-When an order is deleted, `OrderService::deleteOrder()` restores stock for every item in the order within a single transaction:
+`OrderService::deleteOrder()` runs in a single transaction:
 
-1. Looks up the order and its items
-2. For each item, acquires a pessimistic lock on the product row (`FOR UPDATE`)
-3. Restores the deducted quantity back to the product
-4. Records an inventory history entry with `change_type = return`
-5. Deletes the order and its items
-6. Flushes the product cache
+1. Locks the order row and loads its items
+2. Restores stock (product rows locked in id order) and records `return` history entries — skipped if the stock was already restored (`stock_restored_at`), e.g. for a cancelled or refunded order
+3. Releases the coupon use, unless cancellation already did
+4. Deletes the order (`order_items` go via `ON DELETE CASCADE`)
+5. Flushes the product cache
 
 ---
 
@@ -269,11 +288,16 @@ Enforces what **external systems** (payment providers, shipping carriers) can tr
 
 All three methods throw `InvalidOrderStateException` on violation and return `void` on success.
 
+The machine also owns two eligibility rules that are not transitions:
+
+- `isRefundable(Order)` — `paid` and `processing` orders are refunded (stock restored) when cancelled.
+- `assertReturnAllowed(Order)` — return requests may be created **and approved** only for `paid`, `shipped` or `delivered` orders. Approval re-checks this under lock, so a return cannot be approved after its order was cancelled.
+
 ### Cancellation with auto-refund
 
-When an order in `paid` or `processing` status is cancelled (by user or admin), `OrderService` automatically:
+When an order in `paid` or `processing` status is cancelled (by user or admin), `OrderService` automatically (all inside one transaction, with the order row locked and the transition re-validated under that lock):
 
-1. Restores stock for each order item (within a DB transaction with pessimistic locking)
+1. Restores stock for each order item (product rows locked in id order; no-op if already restored)
 2. Records `Return` entries in `inventory_history`
 3. Updates the order status to `cancelled`
 4. Invalidates product caches
@@ -290,12 +314,13 @@ UpdateOrderController::executeRequest()
   ├── 1. Auth / ownership check
   ├── 2. Resolve isAdmin = auth()->user()->isAdmin()
   └── OrderService::updateOrder(id, unpersisted, asAdmin: isAdmin)
-        ├── 3. OrderRepository::findById(id)
-        ├── 4a. if asAdmin  → statusMachine::assertAdminTransitionAllowed(existing, newStatus)
-        │   4b. if !asAdmin → statusMachine::assertUserTransitionAllowed(existing, newStatus)
-        │         └── also checks 24-hour cancellation window
-        ├── 5a. if cancelled → cancelOrder() (with auto-refund if paid/processing)
-        └── 5b. otherwise   → OrderRepository::update(id, unpersisted)
+        └── DB transaction
+              ├── 3. OrderRepository::findByIdForUpdate(id)   (row lock)
+              ├── 4a. if asAdmin  → statusMachine::assertAdminTransitionAllowed(existing, newStatus)
+              │   4b. if !asAdmin → statusMachine::assertUserTransitionAllowed(existing, newStatus)
+              │         └── also checks 24-hour cancellation window
+              ├── 5a. if cancelled → cancelOrder() (auto-refund if statusMachine::isRefundable)
+              └── 5b. otherwise   → OrderRepository::update(id, unpersisted)
 
 POST /api/v1/webhooks/payments
 PaymentWebhookController::__invoke()
@@ -327,7 +352,7 @@ Tagged caching via Laravel's `Cache` facade. Invalidation is performed in the se
 
 | Resource | Tag | TTL | Cached methods |
 |----------|-----|-----|----------------|
-| Categories | `categories` | 30 min | `getAll`, `findById`, `findByName`, `getSubcategoriesById` |
+| Categories | `categories` | 30 min | `getAll`, `findById`, `getSubcategoriesById` |
 | Products | `products` | 5 min | `getAll`, `findById`, `findByCategoryId` |
 | Orders | — | — | Not cached (user-specific, real-time state) |
 | Inventory history | — | — | Not cached (append-only admin log) |
@@ -336,7 +361,7 @@ Tagged caching via Laravel's `Cache` facade. Invalidation is performed in the se
 
 **Key strategy:** List endpoints use `md5(serialize($params))` for deterministic keys per unique query.
 
-**Invalidation:** On any write, the specific item key is forgotten (`Cache::forget`) and the entire tag group is flushed (`Cache::tags()->flush()`). Cache is only flushed on success — failed mutations leave the cache intact. Order placement also flushes the `products` tag (stock changed).
+**Invalidation:** On any write the entire tag group is flushed (`Cache::tags()->flush()`) — everything cached under a tag lives in that group, so per-key `Cache::forget` is neither needed nor effective for tagged entries. Cache is only flushed on success — failed mutations leave the cache intact. Anything that changes stock (orders, cancellations, deletes, approved returns) also flushes the `products` tag. A concurrent reader can briefly re-cache pre-commit data; it expires with the TTL and never affects stock correctness (writes read under lock).
 
 ---
 
@@ -348,7 +373,7 @@ All mutations are recorded to a dedicated `audit` channel (`app/Services/AuditLo
 |---------|---------|
 | ProductService | `product.created`, `product.updated`, `product.deleted` |
 | CategoryService | `category.created`, `category.updated`, `category.deleted` |
-| OrderService | `order.created`, `order.paid`, `order.updated`, `order.deleted` |
+| OrderService | `order.created`, `order.paid`, `order.payment_failed`, `order.shipped`, `order.delivered`, `order.updated`, `order.cancelled`, `order.deleted` |
 | CouponService | `coupon.created`, `coupon.updated`, `coupon.deleted` |
 | ReturnRequestService | `return_request.created`, `return_request.approved`, `return_request.rejected` |
 
@@ -405,23 +430,8 @@ Custom exceptions map to HTTP status codes via `App/Exceptions/Handler.php`:
 | Exception | HTTP Status |
 |-----------|-------------|
 | `ProductNotFoundException`, `CategoryNotFoundException`, `OrderNotFoundException`, `CouponNotFoundException`, `ReturnRequestNotFoundException` | `404` |
-| `ProductAlreadyExistsException`, `CategoryAlreadyExistsException` | `409` |
+| `ProductAlreadyExistsException`, `CategoryAlreadyExistsException`, `ProductVersionConflictException`, any unmapped `UniqueConstraintViolationException` | `409` |
 | `InsufficientStockException`, `InvalidOrderStateException`, `InvalidCouponException`, `InvalidReturnRequestStateException`, `BadRequestException` | `400` |
 | `UnprocessableEntityException`, `ValidationException` | `422` |
 
 All error responses follow the standard format: `{ "success": false, "message": "..." }`.
-
----
-
-## Extension Points
-
-**Adding a new CQRS command** → see [Design Patterns § CQRS](#cqrs-command-bus).
-
-**Adding a new resource:**
-1. Model (`app/Models/`), DTO (`app/Dto/`), Repository + interface (`app/Repositories/`)
-2. Service + interface (`app/Services/`), Transformer (`app/Transformers/`)
-3. Controllers, Requests, Responses (`app/Http/`)
-4. Routes (`routes/api.php`), binding in `AppServiceProvider`
-5. Tests (Unit + Feature)
-
-**Adding a new order transition** → see [Order Status Machine § Adding a new transition](#adding-a-new-transition).

@@ -37,25 +37,27 @@
 - List subcategories
 
 ### Order Management
-- Multi-item orders with atomic stock validation
+- Multi-item orders with atomic stock validation; products locked in a stable order so concurrent orders cannot deadlock
+- Optional coupon at creation time (one use consumed atomically) and idempotent retries via an `Idempotency-Key` header
 - Filter by status (single or multiple) and price range
 - Full status lifecycle: pending → paid → processing → shipped → delivered
-- Cancellation with auto-refund (restores stock for paid/processing orders)
+- Cancellation with auto-refund (restores stock for paid/processing orders) — stock is never restored twice across cancel/delete/return-approval
 - User cancellation within 24h window
 
 ### Inventory Management
 - Pessimistic row-level locking (`SELECT ... FOR UPDATE`) prevents overselling
-- Full audit trail with change types: addition, removal, sale, return, adjustment, transfer
+- Optimistic locking (`version` column) on direct product updates, so a concurrent sale is never silently overwritten
+- Full audit trail with change types: addition, removal, sale, return, adjustment, transfer, paginated per product
 - All stock mutations wrapped in database transactions
 
 ### Coupon System
 - Percentage and fixed-amount discount types
-- Validation: active status, expiry, usage limits, minimum order amount
-- Discount preview via `POST /coupons/apply`
+- Validation: active status, expiry, usage limits (`max_uses` enforced atomically, race-safe), minimum order amount
+- Discount preview via `POST /coupons/apply` (does not consume); applied and consumed via `coupon_code` on `POST /orders`
 
 ### Return/Refund System
-- Customers submit return requests for qualifying orders (paid, shipped, or delivered)
-- Admin approval/rejection workflow with notes
+- Customers submit return requests for qualifying orders (paid, shipped, or delivered); one active (non-rejected) request per order
+- Admin approval/rejection workflow with notes; eligibility is re-checked on approval in case the order changed state meanwhile
 - Approved returns automatically restore inventory and transition order to refunded
 
 ### Webhooks
@@ -69,7 +71,7 @@
 
 ### Caching
 - Tagged cache for categories (30-min TTL) and products (5-min TTL)
-- Automatic invalidation on write operations
+- Automatic invalidation (tag flush) on write operations, including any stock-changing action
 
 ### Audit Logging
 - All mutations logged to dedicated `audit` channel with structured entries
@@ -88,7 +90,7 @@
 - **Models**: 8 entities (User, Product, Category, Order, OrderItem, InventoryHistory, Coupon, ReturnRequest)
 - **Repositories**: 6 (with interfaces)
 - **Services**: 7 + AuditLogger
-- **Tests**: 420+ (Unit, Feature, E2E, Performance, Security)
+- **Tests**: 440+ (Unit, Feature, E2E, Performance, Security)
 - **API Endpoints**: 30+
 
 ---

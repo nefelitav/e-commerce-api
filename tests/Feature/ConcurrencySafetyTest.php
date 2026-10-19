@@ -307,6 +307,28 @@ class ConcurrencySafetyTest extends TestCase
         $this->assertSame(1, CouponModel::query()->where('code', 'NEW10')->count());
     }
 
+    public function test_updating_to_a_duplicate_name_or_code_is_rejected_not_a_500(): void
+    {
+        $this->actingAs(UserFixture::admin());
+        ['product' => $first] = CatalogFixture::simpleProductInCategory(5.00, 5);
+        ['product' => $second] = CatalogFixture::simpleProductInCategory(5.00, 5);
+
+        $this->putJson(route('v1.products.update', $second->id), [
+            'name' => $first->name, 'description' => 'd', 'price' => 5, 'quantity' => 5, 'category_id' => $second->category_id,
+        ])->assertStatus(Response::HTTP_BAD_REQUEST);
+
+        $a = \App\Models\Category\CategoryModel::factory()->create(['name' => 'Cat A']);
+        $b = \App\Models\Category\CategoryModel::factory()->create(['name' => 'Cat B']);
+        $this->putJson(route('v1.categories.update', $b->id), ['name' => 'Cat A', 'description' => 'd', 'parent_id' => null])
+            ->assertStatus(Response::HTTP_BAD_REQUEST);
+        $this->assertNotSame($a->id, $b->id);
+
+        $this->coupon(['code' => 'ONE']);
+        $two = $this->coupon(['code' => 'TWO']);
+        $this->putJson(route('v1.coupons.update', $two->id), ['code' => 'ONE', 'type' => 'percentage', 'value' => 5])
+            ->assertStatus(Response::HTTP_BAD_REQUEST);
+    }
+
     // ---- helpers ------------------------------------------------------------------
 
     /**
