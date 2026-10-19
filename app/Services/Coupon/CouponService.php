@@ -10,6 +10,7 @@ use App\Exceptions\InvalidCouponException;
 use App\Repositories\Coupon\CouponRepositoryInterface;
 use App\Services\AuditLogger;
 use Carbon\Carbon;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Pagination\LengthAwarePaginator;
 
 final readonly class CouponService implements CouponServiceInterface
@@ -43,13 +44,11 @@ final readonly class CouponService implements CouponServiceInterface
      */
     public function createCoupon(UnpersistedCoupon $coupon): Coupon
     {
-        $existing = $this->repository->findByCode($coupon->code);
-
-        if ($existing !== null) {
+        try {
+            $created = $this->repository->persist($coupon);
+        } catch (UniqueConstraintViolationException) {
             throw new InvalidCouponException("A coupon with code '{$coupon->code}' already exists.");
         }
-
-        $created = $this->repository->persist($coupon);
 
         $this->auditLogger->log('coupon.created', 'coupon', $created->id, [
             'code' => $created->code,
@@ -65,7 +64,11 @@ final readonly class CouponService implements CouponServiceInterface
      */
     public function updateCoupon(int $id, UnpersistedCoupon $coupon): Coupon
     {
-        $updated = $this->repository->update($id, $coupon);
+        try {
+            $updated = $this->repository->update($id, $coupon);
+        } catch (UniqueConstraintViolationException) {
+            throw new InvalidCouponException("A coupon with code '{$coupon->code}' already exists.");
+        }
 
         $this->auditLogger->log('coupon.updated', 'coupon', $id, [
             'code' => $updated->code,
@@ -119,6 +122,22 @@ final readonly class CouponService implements CouponServiceInterface
         }
 
         return $coupon;
+    }
+
+    public function redeemCoupon(string $code, float $orderTotal): Coupon
+    {
+        $coupon = $this->validateCoupon($code, $orderTotal);
+
+        if (! $this->repository->incrementUsage($coupon->id)) {
+            throw new InvalidCouponException("Coupon '{$code}' has reached its maximum number of uses.");
+        }
+
+        return $coupon;
+    }
+
+    public function releaseCoupon(int $id): void
+    {
+        $this->repository->decrementUsage($id);
     }
 
     public function calculateDiscount(Coupon $coupon, float $orderTotal): float

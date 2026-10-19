@@ -16,6 +16,7 @@ use App\Repositories\InventoryHistory\InventoryHistoryRepositoryInterface;
 use App\Repositories\Product\ProductRepositoryInterface;
 use App\Services\AuditLogger;
 use App\Services\Product\ProductService;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Pagination\LengthAwarePaginator;
 use PHPUnit\Framework\MockObject\MockObject;
@@ -27,8 +28,10 @@ class ProductServiceTest extends TestCase
 
     /** @var ProductRepositoryInterface&MockObject */
     private ProductRepositoryInterface $repository;
+
     /** @var InventoryHistoryRepositoryInterface&MockObject */
     private InventoryHistoryRepositoryInterface $inventoryHistoryRepository;
+
     private ProductService $service;
 
     protected function setUp(): void
@@ -37,20 +40,20 @@ class ProductServiceTest extends TestCase
 
         $this->repository = $this->createMock(ProductRepositoryInterface::class);
         $this->inventoryHistoryRepository = $this->createMock(InventoryHistoryRepositoryInterface::class);
-        $this->service = new ProductService($this->repository, $this->inventoryHistoryRepository, new AuditLogger());
+        $this->service = new ProductService($this->repository, $this->inventoryHistoryRepository, new AuditLogger);
     }
 
-    public function test_listProducts_returns_array_of_products(): void
+    public function test_list_products_returns_array_of_products(): void
     {
         $productModels = ProductModel::factory()->count(2)->create();
 
-        $products = $productModels->map(fn($model) => Product::fromModel($model));
+        $products = $productModels->map(fn ($model) => Product::fromModel($model));
 
         $paginator = new LengthAwarePaginator(
             $products,
             count($products),
             15,
-            1
+            1,
         );
 
         $this->repository
@@ -63,7 +66,7 @@ class ProductServiceTest extends TestCase
         $this->assertSame($paginator, $result);
     }
 
-    public function test_getProductsByCategoryId_returns_array_of_products(): void
+    public function test_get_products_by_category_id_returns_array_of_products(): void
     {
         $categoryId = 1;
         $products = [Product::fromModel(ProductModel::factory()->create())];
@@ -78,7 +81,7 @@ class ProductServiceTest extends TestCase
         $this->assertSame($products, $result);
     }
 
-    public function test_getProductById_returns_product(): void
+    public function test_get_product_by_id_returns_product(): void
     {
         $id = 1;
         $product = Product::fromModel(ProductModel::factory()->create());
@@ -93,7 +96,7 @@ class ProductServiceTest extends TestCase
         $this->assertSame($product, $result);
     }
 
-    public function test_createProduct_throws_if_product_exists(): void
+    public function test_create_product_maps_unique_violation_to_already_exists(): void
     {
         $unpersisted = new UnpersistedProduct(
             name: 'Existing Product',
@@ -103,20 +106,17 @@ class ProductServiceTest extends TestCase
             categoryId: 1,
         );
 
-        $existingProduct = Product::fromModel(ProductModel::factory()->create());
-
         $this->repository
             ->expects($this->once())
-            ->method('findByName')
-            ->with('Existing Product')
-            ->willReturn($existingProduct);
+            ->method('persist')
+            ->willThrowException(new UniqueConstraintViolationException('pgsql', 'insert', [], new \Exception('duplicate key')));
 
         $this->expectException(ProductAlreadyExistsException::class);
 
         $this->service->createProduct($unpersisted);
     }
 
-    public function test_createProduct_persists_and_returns_product(): void
+    public function test_create_product_persists_and_returns_product(): void
     {
         $unpersisted = new UnpersistedProduct(
             name: 'New Product',
@@ -127,12 +127,6 @@ class ProductServiceTest extends TestCase
         );
 
         $persistedProduct = Product::fromModel(ProductModel::factory()->create());
-
-        $this->repository
-            ->expects($this->once())
-            ->method('findByName')
-            ->with('New Product')
-            ->willReturn(null);
 
         $this->repository
             ->expects($this->once())
@@ -151,7 +145,7 @@ class ProductServiceTest extends TestCase
         $this->assertSame($persistedProduct, $result);
     }
 
-    public function test_updateProduct_calls_repository_update_without_history_when_quantity_unchanged(): void
+    public function test_update_product_calls_repository_update_without_history_when_quantity_unchanged(): void
     {
         $id = 1;
         $quantity = 5;
@@ -190,7 +184,7 @@ class ProductServiceTest extends TestCase
         $this->assertSame($updatedProduct, $result);
     }
 
-    public function test_updateProduct_records_inventory_history_when_quantity_changes(): void
+    public function test_update_product_records_inventory_history_when_quantity_changes(): void
     {
         $id = 1;
 
@@ -235,7 +229,7 @@ class ProductServiceTest extends TestCase
         $this->assertSame($updatedProduct, $result);
     }
 
-    public function test_updateProduct_throws_InsufficientStockException_when_quantity_is_negative(): void
+    public function test_update_product_throws_insufficient_stock_exception_when_quantity_is_negative(): void
     {
         $id = 1;
 
@@ -265,7 +259,7 @@ class ProductServiceTest extends TestCase
         $this->service->updateProduct($id, $unpersisted);
     }
 
-    public function test_updateProduct_throws_ProductNotFoundException(): void
+    public function test_update_product_throws_product_not_found_exception(): void
     {
         $id = 1;
         $unpersisted = new UnpersistedProduct(
@@ -287,7 +281,7 @@ class ProductServiceTest extends TestCase
         $this->service->updateProduct($id, $unpersisted);
     }
 
-    public function test_deleteProduct_returns_true(): void
+    public function test_delete_product_returns_true(): void
     {
         $id = 1;
 
@@ -302,7 +296,7 @@ class ProductServiceTest extends TestCase
         $this->assertTrue($result);
     }
 
-    public function test_deleteProduct_throws_ProductNotFoundException(): void
+    public function test_delete_product_throws_product_not_found_exception(): void
     {
         $id = 1;
 

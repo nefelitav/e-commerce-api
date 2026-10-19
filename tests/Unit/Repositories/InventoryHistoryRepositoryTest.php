@@ -32,8 +32,21 @@ class InventoryHistoryRepositoryTest extends TestCase
 
         $result = $this->repository->listByProductId($product->id);
 
-        $this->assertCount(3, $result);
-        $this->assertEquals($product->id, $result[0]->productId);
+        $this->assertSame(3, $result->total());
+        $this->assertCount(3, $result->items());
+        $this->assertEquals($product->id, $result->items()[0]->productId);
+    }
+
+    public function test_it_lists_entries_oldest_first_and_paginates(): void
+    {
+        $product = ProductModel::factory()->create();
+        $ids = InventoryHistoryModel::factory()->count(5)->create(['product_id' => $product->id])->pluck('id')->all();
+
+        $page2 = $this->repository->listByProductId($product->id, page: 2, perPage: 2);
+
+        $this->assertSame(5, $page2->total());
+        $this->assertSame(3, $page2->lastPage());
+        $this->assertSame([$ids[2], $ids[3]], array_map(static fn ($e) => $e->id, $page2->items()));
     }
 
     public function test_it_records_entry(): void

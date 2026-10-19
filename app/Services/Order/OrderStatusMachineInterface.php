@@ -22,4 +22,11 @@ interface OrderStatusMachineInterface
      * @throws InvalidOrderStateException
      */
     public function assertWebhookTransitionAllowed(Order $existing, OrderStatus $newStatus): void;
+
+    /**
+     * Whether the order is in a state that can have a return request (created or approved).
+     *
+     * @throws InvalidOrderStateException
+     */
+    public function assertReturnAllowed(Order $order): void;
 }

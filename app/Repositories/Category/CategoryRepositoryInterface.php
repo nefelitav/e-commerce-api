@@ -5,13 +5,14 @@ namespace App\Repositories\Category;
 use App\Dto\Category\Category;
 use App\Dto\Category\UnpersistedCategory;
 use App\Exceptions\CategoryNotFoundException;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Pagination\LengthAwarePaginator;
 
 interface CategoryRepositoryInterface
 {
     /**
-     * @param array<string, mixed> $filters
-     * @param array<string> $includes
+     * @param  array<string, mixed>  $filters
+     * @param  array<string>  $includes
      * @return LengthAwarePaginator<int, Category>
      */
     public function getAll(
@@ -20,7 +21,7 @@ interface CategoryRepositoryInterface
         string $sort = 'id',
         string $order = 'asc',
         array $filters = [],
-        array $includes = []
+        array $includes = [],
     ): LengthAwarePaginator;
 
     /**
@@ -30,12 +31,14 @@ interface CategoryRepositoryInterface
 
     public function findById(int $id): ?Category;
 
-    public function findByName(string $name): ?Category;
-
+    /**
+     * @throws UniqueConstraintViolationException when the name is already taken (lost a race)
+     */
     public function persist(UnpersistedCategory $unpersistedCategory): Category;
 
     /**
      * @throws CategoryNotFoundException
+     * @throws UniqueConstraintViolationException when the name is already taken (lost a race)
      */
     public function update(int $id, UnpersistedCategory $unpersistedCategory): Category;
 
@@ -44,4 +47,3 @@ interface CategoryRepositoryInterface
      */
     public function delete(int $id): bool;
 }
-

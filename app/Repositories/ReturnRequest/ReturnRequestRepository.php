@@ -8,6 +8,7 @@ use App\Enums\ReturnRequestStatus;
 use App\Exceptions\ReturnRequestNotFoundException;
 use App\Models\ReturnRequest\ReturnRequestModel;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\DB;
 
 class ReturnRequestRepository implements ReturnRequestRepositoryInterface
 {
@@ -57,10 +58,15 @@ class ReturnRequestRepository implements ReturnRequestRepositoryInterface
         return $model ? ReturnRequest::fromModel($model) : null;
     }
 
-    public function findByOrderId(int $orderId): ?ReturnRequest
+    public function findByIdForUpdate(int $id): ?ReturnRequest
     {
+        assert(
+            DB::transactionLevel() > 0,
+            'findByIdForUpdate must be called inside a DB transaction.',
+        );
+
         /** @var ReturnRequestModel|null $model */
-        $model = ReturnRequestModel::query()->where('order_id', $orderId)->first();
+        $model = ReturnRequestModel::query()->where('id', $id)->lockForUpdate()->first();
 
         return $model ? ReturnRequest::fromModel($model) : null;
     }

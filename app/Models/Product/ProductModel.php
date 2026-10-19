@@ -17,8 +17,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string|null $description
  * @property float $price
  * @property int $quantity
+ * @property int $version
  * @property int $category_id
  * @property CategoryModel $category
+ *
  * @method static static create(array<mixed> $attributes = [])
  * @method static Builder<ProductModel> query()
  * @method static static|null find(int|string $id, array<int, string> $columns = ['*'])
@@ -26,11 +28,15 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class ProductModel extends Model
 {
     use CreatedAtUtcTrait;
-    use UpdatedAtUtcTrait;
     /** @use HasFactory<ProductModelFactory> */
     use HasFactory;
+    use UpdatedAtUtcTrait;
 
     protected $table = 'products';
+
+    protected $attributes = [
+        'version' => 1,
+    ];
 
     protected $fillable = [
         'name',
@@ -39,6 +45,17 @@ class ProductModel extends Model
         'quantity',
         'category_id',
     ];
+
+    protected static function booted(): void
+    {
+        // Optimistic locking: every real change (including stock movements)
+        // bumps the version so stale edits can be detected.
+        static::updating(static function (self $product): void {
+            if ($product->isDirty() && ! $product->isDirty('version')) {
+                $product->version++;
+            }
+        });
+    }
 
     /**
      * @return BelongsTo<CategoryModel, $this>

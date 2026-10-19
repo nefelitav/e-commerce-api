@@ -16,7 +16,7 @@ final class ListInventoryHistoryRequest extends FormRequest
      */
     public function validationData(): array
     {
-        return array_merge($this->request->all(), $this->route()->parameters());
+        return array_merge($this->all(), $this->route()->parameters());
     }
 
     /**
@@ -26,7 +26,8 @@ final class ListInventoryHistoryRequest extends FormRequest
     {
         return [
             'id' => ['required', 'integer', 'exists:products,id'],
+            'page' => ['sometimes', 'integer', 'min:1'],
+            'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
         ];
     }
 }
-

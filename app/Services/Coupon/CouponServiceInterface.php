@@ -46,4 +46,14 @@ interface CouponServiceInterface
     public function validateCoupon(string $code, float $orderTotal): Coupon;
 
     public function calculateDiscount(Coupon $coupon, float $orderTotal): float;
+
+    /**
+     * Validate the coupon and atomically consume one use; call inside the order transaction.
+     *
+     * @throws CouponNotFoundException
+     * @throws InvalidCouponException
+     */
+    public function redeemCoupon(string $code, float $orderTotal): Coupon;
+
+    public function releaseCoupon(int $id): void;
 }

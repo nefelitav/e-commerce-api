@@ -22,7 +22,7 @@ class ProductRepositoryCachingTest extends TestCase
         parent::setUp();
 
         Cache::tags(['products'])->flush();
-        $this->repository = new ProductRepository();
+        $this->repository = new ProductRepository;
     }
 
     protected function tearDown(): void
@@ -31,7 +31,7 @@ class ProductRepositoryCachingTest extends TestCase
         parent::tearDown();
     }
 
-    public function test_findById_caches_result_on_first_call(): void
+    public function test_find_by_id_caches_result_on_first_call(): void
     {
         $product = ProductModel::factory()->create();
         $cacheKey = "products.{$product->id}";
@@ -45,7 +45,7 @@ class ProductRepositoryCachingTest extends TestCase
         $this->assertEquals($product->name, $result->name);
     }
 
-    public function test_findById_returns_cached_result_on_second_call(): void
+    public function test_find_by_id_returns_cached_result_on_second_call(): void
     {
         $product = ProductModel::factory()->create();
 
@@ -55,18 +55,18 @@ class ProductRepositoryCachingTest extends TestCase
         $this->assertEquals($firstResult, $secondResult);
     }
 
-    public function test_findById_returns_null_for_missing_product(): void
+    public function test_find_by_id_returns_null_for_missing_product(): void
     {
         $result = $this->repository->findById(999);
 
         $this->assertNull($result);
     }
 
-    public function test_getAll_caches_result(): void
+    public function test_get_all_caches_result(): void
     {
         ProductModel::factory()->count(3)->create();
 
-        $cacheKey = 'products.all.' . md5(serialize([1, 15, 'id', 'asc', [], []]));
+        $cacheKey = 'products.all.'.md5(serialize([1, 15, 'id', 'asc', [], []]));
 
         $this->assertFalse(Cache::tags(['products'])->has($cacheKey));
 
@@ -75,7 +75,7 @@ class ProductRepositoryCachingTest extends TestCase
         $this->assertTrue(Cache::tags(['products'])->has($cacheKey));
     }
 
-    public function test_getAll_returns_same_result_from_cache(): void
+    public function test_get_all_returns_same_result_from_cache(): void
     {
         ProductModel::factory()->count(2)->create();
 
@@ -86,12 +86,12 @@ class ProductRepositoryCachingTest extends TestCase
         $this->assertCount(2, $firstResult);
     }
 
-    public function test_getAll_caches_different_keys_for_different_params(): void
+    public function test_get_all_caches_different_keys_for_different_params(): void
     {
         ProductModel::factory()->count(3)->create();
 
-        $key1 = 'products.all.' . md5(serialize([1, 15, 'id', 'asc', [], []]));
-        $key2 = 'products.all.' . md5(serialize([1, 15, 'name', 'desc', [], []]));
+        $key1 = 'products.all.'.md5(serialize([1, 15, 'id', 'asc', [], []]));
+        $key2 = 'products.all.'.md5(serialize([1, 15, 'name', 'desc', [], []]));
 
         $this->repository->getAll(sort: 'id', order: 'asc');
         $this->repository->getAll(sort: 'name', order: 'desc');
@@ -100,7 +100,7 @@ class ProductRepositoryCachingTest extends TestCase
         $this->assertTrue(Cache::tags(['products'])->has($key2));
     }
 
-    public function test_findByCategoryId_caches_result(): void
+    public function test_find_by_category_id_caches_result(): void
     {
         $category = CategoryModel::factory()->create();
         ProductModel::factory()->count(2)->create(['category_id' => $category->id]);
@@ -115,7 +115,7 @@ class ProductRepositoryCachingTest extends TestCase
         $this->assertCount(2, $result);
     }
 
-    public function test_findByCategoryId_caches_empty_array_for_unknown_category(): void
+    public function test_find_by_category_id_caches_empty_array_for_unknown_category(): void
     {
         $result = $this->repository->findByCategoryId(999);
 
@@ -123,7 +123,7 @@ class ProductRepositoryCachingTest extends TestCase
         $this->assertTrue(Cache::tags(['products'])->has('products.category.999'));
     }
 
-    public function test_findByIdForUpdate_is_not_cached(): void
+    public function test_find_by_id_for_update_is_not_cached(): void
     {
         $product = ProductModel::factory()->create();
 
@@ -132,16 +132,6 @@ class ProductRepositoryCachingTest extends TestCase
         });
 
         $this->assertFalse(Cache::tags(['products'])->has("products.{$product->id}"));
-    }
-
-    public function test_findByName_is_not_cached(): void
-    {
-        $product = ProductModel::factory()->create(['name' => 'Unique Widget']);
-
-        $result = $this->repository->findByName('Unique Widget');
-
-        $this->assertNotNull($result);
-        $this->assertFalse(Cache::tags(['products'])->has('products.name.' . md5('Unique Widget')));
     }
 
     public function test_persist_does_not_cache_result(): void
@@ -161,5 +151,3 @@ class ProductRepositoryCachingTest extends TestCase
         $this->assertFalse(Cache::tags(['products'])->has("products.{$result->id}"));
     }
 }
-
-

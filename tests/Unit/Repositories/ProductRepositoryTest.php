@@ -20,7 +20,7 @@ class ProductRepositoryTest extends TestCase
     {
         parent::setUp();
 
-        $this->repository = new ProductRepository();
+        $this->repository = new ProductRepository;
     }
 
     public function test_it_returns_all_products(): void
@@ -32,7 +32,7 @@ class ProductRepositoryTest extends TestCase
         $this->assertCount(3, $products->items());
         $this->assertEquals(
             ProductModel::query()->first()->name,
-            $products->items()[0]->name
+            $products->items()[0]->name,
         );
     }
 
@@ -70,17 +70,6 @@ class ProductRepositoryTest extends TestCase
         $result = $this->repository->findById(999);
 
         $this->assertNull($result);
-    }
-
-    public function test_it_finds_product_by_name(): void
-    {
-        $productName = 'Unique Product';
-        ProductModel::factory()->create(['name' => $productName]);
-
-        $result = $this->repository->findByName($productName);
-
-        $this->assertNotNull($result);
-        $this->assertEquals($productName, $result->name);
     }
 
     public function test_it_persists_a_new_product(): void

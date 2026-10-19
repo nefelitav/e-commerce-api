@@ -3,7 +3,6 @@
 namespace Tests\Unit\Services;
 
 use App\Dto\InventoryHistory\InventoryHistoryEntry;
-use App\Dto\InventoryHistory\UnpersistedInventoryHistoryEntry;
 use App\Dto\Product\Product;
 use App\Dto\Product\UnpersistedProduct;
 use App\Exceptions\ProductNotFoundException;
@@ -13,6 +12,7 @@ use App\Repositories\InventoryHistory\InventoryHistoryRepositoryInterface;
 use App\Repositories\Product\ProductRepositoryInterface;
 use App\Services\AuditLogger;
 use App\Services\Product\ProductService;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use PHPUnit\Framework\MockObject\MockObject;
@@ -24,8 +24,10 @@ class ProductServiceCacheInvalidationTest extends TestCase
 
     /** @var ProductRepositoryInterface&MockObject */
     private ProductRepositoryInterface $repository;
+
     /** @var InventoryHistoryRepositoryInterface&MockObject */
     private InventoryHistoryRepositoryInterface $inventoryHistoryRepository;
+
     private ProductService $service;
 
     protected function setUp(): void
@@ -35,7 +37,7 @@ class ProductServiceCacheInvalidationTest extends TestCase
         Cache::tags(['products'])->flush();
         $this->repository = $this->createMock(ProductRepositoryInterface::class);
         $this->inventoryHistoryRepository = $this->createMock(InventoryHistoryRepositoryInterface::class);
-        $this->service = new ProductService($this->repository, $this->inventoryHistoryRepository, new AuditLogger());
+        $this->service = new ProductService($this->repository, $this->inventoryHistoryRepository, new AuditLogger);
     }
 
     protected function tearDown(): void
@@ -44,7 +46,7 @@ class ProductServiceCacheInvalidationTest extends TestCase
         parent::tearDown();
     }
 
-    public function test_createProduct_flushes_product_cache(): void
+    public function test_create_product_flushes_product_cache(): void
     {
         Cache::tags(['products'])->put('products.all.test', 'cached_value', 300);
         Cache::tags(['products'])->put('products.category.1', 'cached_value', 300);
@@ -61,7 +63,6 @@ class ProductServiceCacheInvalidationTest extends TestCase
 
         $persistedProduct = Product::fromModel(ProductModel::factory()->create());
 
-        $this->repository->method('findByName')->willReturn(null);
         $this->repository->method('persist')->willReturn($persistedProduct);
         $this->inventoryHistoryRepository
             ->method('record')
@@ -73,7 +74,7 @@ class ProductServiceCacheInvalidationTest extends TestCase
         $this->assertFalse(Cache::tags(['products'])->has('products.category.1'));
     }
 
-    public function test_updateProduct_flushes_product_cache_and_forgets_specific_key(): void
+    public function test_update_product_flushes_product_cache_and_forgets_specific_key(): void
     {
         $id = 1;
         Cache::tags(['products'])->put("products.{$id}", 'cached_value', 300);
@@ -100,7 +101,7 @@ class ProductServiceCacheInvalidationTest extends TestCase
         $this->assertFalse(Cache::tags(['products'])->has('products.all.test'));
     }
 
-    public function test_deleteProduct_flushes_product_cache_and_forgets_specific_key(): void
+    public function test_delete_product_flushes_product_cache_and_forgets_specific_key(): void
     {
         $id = 42;
         Cache::tags(['products'])->put("products.{$id}", 'cached_value', 300);
@@ -114,7 +115,7 @@ class ProductServiceCacheInvalidationTest extends TestCase
         $this->assertFalse(Cache::tags(['products'])->has('products.all.test'));
     }
 
-    public function test_cache_not_flushed_when_createProduct_throws(): void
+    public function test_cache_not_flushed_when_create_product_throws(): void
     {
         Cache::tags(['products'])->put('products.all.test', 'cached_value', 300);
 
@@ -126,8 +127,9 @@ class ProductServiceCacheInvalidationTest extends TestCase
             categoryId: 1,
         );
 
-        $existingProduct = Product::fromModel(ProductModel::factory()->create());
-        $this->repository->method('findByName')->willReturn($existingProduct);
+        $this->repository->method('persist')->willThrowException(
+            new UniqueConstraintViolationException('pgsql', 'insert', [], new \Exception('duplicate key')),
+        );
 
         try {
             $this->service->createProduct($unpersisted);
@@ -137,7 +139,7 @@ class ProductServiceCacheInvalidationTest extends TestCase
         $this->assertTrue(Cache::tags(['products'])->has('products.all.test'));
     }
 
-    public function test_cache_not_flushed_when_deleteProduct_throws(): void
+    public function test_cache_not_flushed_when_delete_product_throws(): void
     {
         Cache::tags(['products'])->put('products.all.test', 'cached_value', 300);
 
@@ -151,4 +153,3 @@ class ProductServiceCacheInvalidationTest extends TestCase
         $this->assertTrue(Cache::tags(['products'])->has('products.all.test'));
     }
 }
-

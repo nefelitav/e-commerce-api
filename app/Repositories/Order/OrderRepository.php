@@ -13,8 +13,8 @@ use Illuminate\Support\Facades\DB;
 class OrderRepository implements OrderRepositoryInterface
 {
     /**
-     * @param array<string, mixed> $filters
-     * @param array<string> $includes
+     * @param  array<string, mixed>  $filters
+     * @param  array<string>  $includes
      * @return LengthAwarePaginator<int, Order>
      */
     public function getAll(
@@ -23,12 +23,12 @@ class OrderRepository implements OrderRepositoryInterface
         string $sort = 'id',
         string $order = 'asc',
         array $filters = [],
-        array $includes = []
+        array $includes = [],
     ): LengthAwarePaginator {
         $query = OrderModel::query();
 
         // Apply includes
-        if (!empty($includes)) {
+        if (! empty($includes)) {
             $query->with($includes);
         } else {
             $query->with('items');
@@ -58,7 +58,7 @@ class OrderRepository implements OrderRepositoryInterface
 
         $paginator = $query->paginate($perPage, ['*'], 'page', $page);
 
-        $items = $paginator->getCollection()->map(fn(OrderModel $model) => Order::fromModel($model));
+        $items = $paginator->getCollection()->map(fn (OrderModel $model) => Order::fromModel($model));
 
         return new LengthAwarePaginator(
             $items,
@@ -73,6 +73,35 @@ class OrderRepository implements OrderRepositoryInterface
     {
         /** @var OrderModel|null $order */
         $order = OrderModel::with('items')->find($id);
+
+        return $order ? Order::fromModel($order) : null;
+    }
+
+    public function findByIdForUpdate(int $id): ?Order
+    {
+        assert(
+            DB::transactionLevel() > 0,
+            'findByIdForUpdate must be called inside a DB transaction.',
+        );
+
+        /** @var OrderModel|null $order */
+        $order = OrderModel::with('items')->where('id', $id)->lockForUpdate()->first();
+
+        return $order ? Order::fromModel($order) : null;
+    }
+
+    public function markStockRestored(int $id): void
+    {
+        OrderModel::query()->where('id', $id)->update(['stock_restored_at' => now()]);
+    }
+
+    public function findByIdempotencyKey(int $userId, string $key): ?Order
+    {
+        /** @var OrderModel|null $order */
+        $order = OrderModel::with('items')
+            ->where('user_id', $userId)
+            ->where('idempotency_key', $key)
+            ->first();
 
         return $order ? Order::fromModel($order) : null;
     }
@@ -107,13 +136,13 @@ class OrderRepository implements OrderRepositoryInterface
                 /** @var OrderModel|null $orderModel */
                 $orderModel = OrderModel::query()->where('id', $id)->first();
 
-                if (!$orderModel) {
+                if (! $orderModel) {
                     throw new OrderNotFoundException($id);
                 }
 
                 $orderModel->update($unpersistedOrder->toArray());
 
-                if (!empty($unpersistedOrder->items)) {
+                if (! empty($unpersistedOrder->items)) {
                     OrderItemModel::query()->where('order_id', $orderModel->id)->delete();
                     foreach ($unpersistedOrder->items as $item) {
                         OrderItemModel::create($item->toArray($orderModel->id));
@@ -123,7 +152,7 @@ class OrderRepository implements OrderRepositoryInterface
                 $orderModel->load('items');
 
                 return Order::fromModel($orderModel);
-            }
+            },
         );
 
         return $updated;
@@ -134,16 +163,11 @@ class OrderRepository implements OrderRepositoryInterface
      */
     public function delete(int $id): bool
     {
-        /** @var OrderModel|null $orderModel */
-        $orderModel = OrderModel::query()->where('id', $id)->first();
-
-        if (!$orderModel) {
+        // order_items.order_id is ON DELETE CASCADE, so the items go with the order.
+        if (OrderModel::query()->whereKey($id)->delete() === 0) {
             throw new OrderNotFoundException($id);
         }
 
-        OrderItemModel::query()->where('order_id', $orderModel->id)->delete();
-
-        return $orderModel->delete();
+        return true;
     }
 }
-

@@ -337,4 +337,39 @@ class OrderStatusMachineTest extends TestCase
         $this->expectException(InvalidOrderStateException::class);
         $this->machine->assertWebhookTransitionAllowed($order, OrderStatus::Shipped);
     }
+
+    // -----------------------------------------------------------------------
+    // Return eligibility
+    // -----------------------------------------------------------------------
+
+    /**
+     * @return array<string, array{OrderStatus, bool}>
+     */
+    public static function returnEligibilityProvider(): array
+    {
+        return [
+            'pending' => [OrderStatus::Pending, false],
+            'payment_failed' => [OrderStatus::PaymentFailed, false],
+            'paid' => [OrderStatus::Paid, true],
+            'processing' => [OrderStatus::Processing, false],
+            'shipped' => [OrderStatus::Shipped, true],
+            'delivered' => [OrderStatus::Delivered, true],
+            'cancelled' => [OrderStatus::Cancelled, false],
+            'refunded' => [OrderStatus::Refunded, false],
+        ];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('returnEligibilityProvider')]
+    public function test_return_eligibility_by_status(OrderStatus $status, bool $eligible): void
+    {
+        $order = Order::fromModel(OrderModel::factory()->create(['status' => $status->value]));
+
+        if (! $eligible) {
+            $this->expectException(InvalidOrderStateException::class);
+        }
+
+        $this->machine->assertReturnAllowed($order);
+
+        $this->addToAssertionCount(1);
+    }
 }

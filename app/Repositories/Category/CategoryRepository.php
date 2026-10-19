@@ -15,8 +15,8 @@ class CategoryRepository implements CategoryRepositoryInterface
     private const TTL = 1800;
 
     /**
-     * @param array<string, mixed> $filters
-     * @param array<string> $includes
+     * @param  array<string, mixed>  $filters
+     * @param  array<string>  $includes
      * @return LengthAwarePaginator<int, Category>
      */
     public function getAll(
@@ -25,20 +25,20 @@ class CategoryRepository implements CategoryRepositoryInterface
         string $sort = 'id',
         string $order = 'asc',
         array $filters = [],
-        array $includes = []
+        array $includes = [],
     ): LengthAwarePaginator {
-        $cacheKey = 'categories.all.' . md5(serialize([$page, $perPage, $sort, $order, $filters, $includes]));
+        $cacheKey = 'categories.all.'.md5(serialize([$page, $perPage, $sort, $order, $filters, $includes]));
 
         /** @var LengthAwarePaginator<int, Category> $result */
         $result = Cache::tags(['categories'])->remember($cacheKey, self::TTL, function () use ($page, $perPage, $sort, $order, $filters, $includes) {
             $query = CategoryModel::query();
 
-            if (!empty($includes)) {
+            if (! empty($includes)) {
                 $query->with($includes);
             }
 
             if (isset($filters['name'])) {
-                $query->where('name', 'like', '%' . $filters['name'] . '%');
+                $query->where('name', 'like', '%'.$filters['name'].'%');
             }
             if (isset($filters['parent_id'])) {
                 $query->where('parent_id', $filters['parent_id']);
@@ -48,7 +48,7 @@ class CategoryRepository implements CategoryRepositoryInterface
 
             $paginator = $query->paginate($perPage, ['*'], 'page', $page);
 
-            $items = $paginator->getCollection()->map(fn(CategoryModel $model) => Category::fromModel($model));
+            $items = $paginator->getCollection()->map(fn (CategoryModel $model) => Category::fromModel($model));
 
             return new LengthAwarePaginator(
                 $items,
@@ -71,17 +71,11 @@ class CategoryRepository implements CategoryRepositoryInterface
 
         /** @var array<Category> $result */
         $result = Cache::tags(['categories'])->remember($cacheKey, self::TTL, function () use ($id) {
-            $category = CategoryModel::with('children')->find($id);
-
-            if (!$category) {
-                return [];
-            }
-
             /** @var Collection<int, CategoryModel> $children */
-            $children = $category->children()->get();
+            $children = CategoryModel::query()->where('parent_id', $id)->get();
 
             return $children
-                ->map(fn(CategoryModel $child) => Category::fromModel($child))
+                ->map(fn (CategoryModel $child) => Category::fromModel($child))
                 ->all();
         });
 
@@ -94,23 +88,9 @@ class CategoryRepository implements CategoryRepositoryInterface
 
         /** @var Category|null $result */
         $result = Cache::tags(['categories'])->remember($cacheKey, self::TTL, function () use ($id) {
-            $category = CategoryModel::with('children')->find($id);
+            $category = CategoryModel::find($id);
 
             return $category ? Category::fromModel($category) : null;
-        });
-
-        return $result;
-    }
-
-    public function findByName(string $name): ?Category
-    {
-        $cacheKey = 'categories.name.' . md5($name);
-
-        /** @var Category|null $result */
-        $result = Cache::tags(['categories'])->remember($cacheKey, self::TTL, function () use ($name) {
-            $categoryModel = CategoryModel::query()->where('name', $name)->first();
-
-            return $categoryModel ? Category::fromModel($categoryModel) : null;
         });
 
         return $result;
@@ -130,7 +110,7 @@ class CategoryRepository implements CategoryRepositoryInterface
     {
         $categoryModel = CategoryModel::query()->where('id', $id)->first();
 
-        if (!$categoryModel) {
+        if (! $categoryModel) {
             throw new CategoryNotFoundException($id);
         }
 
@@ -146,12 +126,10 @@ class CategoryRepository implements CategoryRepositoryInterface
      */
     public function delete(int $id): bool
     {
-        $categoryModel = CategoryModel::query()->where('id', $id)->first();
-
-        if (!$categoryModel) {
+        if (CategoryModel::query()->whereKey($id)->delete() === 0) {
             throw new CategoryNotFoundException($id);
         }
 
-        return $categoryModel->delete();
+        return true;
     }
 }

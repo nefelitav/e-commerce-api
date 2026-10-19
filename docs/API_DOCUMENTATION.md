@@ -392,9 +392,12 @@ PUT /api/v1/products/{id}
   "description": "Updated description",
   "price": 149.99,
   "quantity": 15,
-  "category_id": 2
+  "category_id": 2,
+  "version": 3
 }
 ```
+
+**Optimistic locking:** every product has a `version` that increases on each change (including stock movements from orders). Send back the `version` you last read; if the product changed in the meantime the update is rejected with `409 Conflict` instead of overwriting it. Omitting `version` skips the check.
 
 **Example Response:**
 ```json
@@ -406,7 +409,8 @@ PUT /api/v1/products/{id}
     "price": 149.99,
     "quantity": 15,
     "description": "Updated description",
-    "category_id": 2
+    "category_id": 2,
+    "version": 4
   },
   "message": "Product updated successfully"
 }
@@ -623,6 +627,7 @@ POST /api/v1/orders
 {
   "status": "pending",
   "total_price": 299.99,
+  "coupon_code": "SUMMER25",
   "items": [
     {
       "product_id": 1,
@@ -633,9 +638,12 @@ POST /api/v1/orders
 }
 ```
 
+**Headers:** `Idempotency-Key: <unique string, max 255>` (optional). A retry with the same key (per user) returns the original order instead of creating another one and deducting stock twice.
+
 **Validation Rules:**
 - `status` — Required, one of: `pending`, `paid`, `shipped`, `delivered`, `cancelled`, `refunded`
 - `total_price` — Required, numeric, min: 0
+- `coupon_code` — Optional string. The coupon is validated and one use is consumed atomically with the order (`max_uses` cannot be exceeded under concurrency); the discount is stored on the order as `discount_amount`. Cancelling or deleting the order releases the use.
 - `items` — Required, array, min 1 item
 - `items.*.product_id` — Required, integer, must exist in products table
 - `items.*.quantity` — Required, integer, min: 1, max: 10000

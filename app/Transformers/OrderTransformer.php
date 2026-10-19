@@ -27,8 +27,9 @@ final readonly class OrderTransformer
             'user_id' => $order->userId,
             'status' => $order->status,
             'total_price' => $order->totalPrice,
+            'coupon_id' => $order->couponId,
+            'discount_amount' => $order->discountAmount,
             'items' => $items,
         ];
     }
 }
-

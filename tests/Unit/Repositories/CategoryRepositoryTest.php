@@ -19,7 +19,7 @@ class CategoryRepositoryTest extends TestCase
     {
         parent::setUp();
 
-        $this->repository = new CategoryRepository();
+        $this->repository = new CategoryRepository;
     }
 
     public function test_it_returns_all_categories(): void
@@ -31,7 +31,7 @@ class CategoryRepositoryTest extends TestCase
         $this->assertCount(3, $categories);
         $this->assertEquals(
             CategoryModel::query()->first()->name,
-            $categories[0]->name
+            $categories[0]->name,
         );
     }
 
@@ -70,18 +70,6 @@ class CategoryRepositoryTest extends TestCase
         $result = $this->repository->findById(999);
 
         $this->assertNull($result);
-    }
-
-    public function test_it_finds_category_by_name(): void
-    {
-        CategoryModel::factory()->create([
-            'name' => 'Electronics',
-        ]);
-
-        $result = $this->repository->findByName('Electronics');
-
-        $this->assertNotNull($result);
-        $this->assertEquals('Electronics', $result->name);
     }
 
     public function test_it_persists_a_new_category(): void

@@ -9,6 +9,7 @@ use App\Models\Category\CategoryModel;
 use App\Repositories\Category\CategoryRepositoryInterface;
 use App\Services\AuditLogger;
 use App\Services\Category\CategoryService;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Tests\TestCase;
@@ -19,6 +20,7 @@ class CategoryServiceCacheInvalidationTest extends TestCase
 
     /** @var CategoryRepositoryInterface&\PHPUnit\Framework\MockObject\MockObject */
     private CategoryRepositoryInterface $repository;
+
     private CategoryService $service;
 
     protected function setUp(): void
@@ -27,7 +29,7 @@ class CategoryServiceCacheInvalidationTest extends TestCase
 
         Cache::tags(['categories'])->flush();
         $this->repository = $this->createMock(CategoryRepositoryInterface::class);
-        $this->service = new CategoryService($this->repository, new AuditLogger());
+        $this->service = new CategoryService($this->repository, new AuditLogger);
     }
 
     protected function tearDown(): void
@@ -36,7 +38,7 @@ class CategoryServiceCacheInvalidationTest extends TestCase
         parent::tearDown();
     }
 
-    public function test_createCategory_flushes_category_cache(): void
+    public function test_create_category_flushes_category_cache(): void
     {
         Cache::tags(['categories'])->put('categories.all.test', 'cached_value', 1800);
         Cache::tags(['categories'])->put('categories.1', 'cached_value', 1800);
@@ -51,7 +53,6 @@ class CategoryServiceCacheInvalidationTest extends TestCase
 
         $persistedCategory = Category::fromModel(CategoryModel::factory()->create());
 
-        $this->repository->method('findByName')->willReturn(null);
         $this->repository->method('persist')->willReturn($persistedCategory);
 
         $this->service->createCategory($unpersisted);
@@ -60,7 +61,7 @@ class CategoryServiceCacheInvalidationTest extends TestCase
         $this->assertFalse(Cache::tags(['categories'])->has('categories.1'));
     }
 
-    public function test_updateCategory_flushes_category_cache(): void
+    public function test_update_category_flushes_category_cache(): void
     {
         Cache::tags(['categories'])->put('categories.5', 'cached_value', 1800);
         Cache::tags(['categories'])->put('categories.all.test', 'cached_value', 1800);
@@ -73,7 +74,6 @@ class CategoryServiceCacheInvalidationTest extends TestCase
 
         $updatedCategory = Category::fromModel(CategoryModel::factory()->create());
 
-        $this->repository->method('findByName')->willReturn(null);
         $this->repository->method('update')->willReturn($updatedCategory);
 
         $this->service->updateCategory(5, $unpersisted);
@@ -82,7 +82,7 @@ class CategoryServiceCacheInvalidationTest extends TestCase
         $this->assertFalse(Cache::tags(['categories'])->has('categories.all.test'));
     }
 
-    public function test_deleteCategory_flushes_category_cache(): void
+    public function test_delete_category_flushes_category_cache(): void
     {
         Cache::tags(['categories'])->put('categories.3', 'cached_value', 1800);
         Cache::tags(['categories'])->put('categories.3.children', 'cached_value', 1800);
@@ -95,7 +95,7 @@ class CategoryServiceCacheInvalidationTest extends TestCase
         $this->assertFalse(Cache::tags(['categories'])->has('categories.3.children'));
     }
 
-    public function test_cache_not_flushed_when_createCategory_throws(): void
+    public function test_cache_not_flushed_when_create_category_throws(): void
     {
         Cache::tags(['categories'])->put('categories.all.test', 'cached_value', 1800);
 
@@ -105,8 +105,9 @@ class CategoryServiceCacheInvalidationTest extends TestCase
             parentId: null,
         );
 
-        $existingCategory = Category::fromModel(CategoryModel::factory()->create());
-        $this->repository->method('findByName')->willReturn($existingCategory);
+        $this->repository->method('persist')->willThrowException(
+            new UniqueConstraintViolationException('pgsql', 'insert', [], new \Exception('duplicate key')),
+        );
 
         try {
             $this->service->createCategory($unpersisted);
@@ -116,7 +117,7 @@ class CategoryServiceCacheInvalidationTest extends TestCase
         $this->assertTrue(Cache::tags(['categories'])->has('categories.all.test'));
     }
 
-    public function test_cache_not_flushed_when_deleteCategory_throws(): void
+    public function test_cache_not_flushed_when_delete_category_throws(): void
     {
         Cache::tags(['categories'])->put('categories.all.test', 'cached_value', 1800);
 
@@ -130,4 +131,3 @@ class CategoryServiceCacheInvalidationTest extends TestCase
         $this->assertTrue(Cache::tags(['categories'])->has('categories.all.test'));
     }
 }
-

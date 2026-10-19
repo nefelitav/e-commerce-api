@@ -2,16 +2,18 @@
 
 namespace App\Services\Product;
 
+use App\Dto\InventoryHistory\UnpersistedInventoryHistoryEntry;
 use App\Dto\Product\Product;
 use App\Dto\Product\UnpersistedProduct;
 use App\Enums\InventoryChangeType;
 use App\Exceptions\InsufficientStockException;
 use App\Exceptions\ProductAlreadyExistsException;
 use App\Exceptions\ProductNotFoundException;
+use App\Exceptions\ProductVersionConflictException;
 use App\Repositories\InventoryHistory\InventoryHistoryRepositoryInterface;
-use App\Dto\InventoryHistory\UnpersistedInventoryHistoryEntry;
 use App\Repositories\Product\ProductRepositoryInterface;
 use App\Services\AuditLogger;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -22,12 +24,11 @@ final readonly class ProductService implements ProductServiceInterface
         private ProductRepositoryInterface $repository,
         private InventoryHistoryRepositoryInterface $inventoryHistoryRepository,
         private AuditLogger $auditLogger,
-    ) {
-    }
+    ) {}
 
     /**
-     * @param array<string, mixed> $filters
-     * @param array<string> $includes
+     * @param  array<string, mixed>  $filters
+     * @param  array<string>  $includes
      * @return LengthAwarePaginator<int, Product>
      */
     public function listProducts(
@@ -36,7 +37,7 @@ final readonly class ProductService implements ProductServiceInterface
         string $sort = 'id',
         string $order = 'asc',
         array $filters = [],
-        array $includes = []
+        array $includes = [],
     ): LengthAwarePaginator {
         return $this->repository->getAll($page, $perPage, $sort, $order, $filters, $includes);
     }
@@ -62,13 +63,11 @@ final readonly class ProductService implements ProductServiceInterface
              * @throws ProductAlreadyExistsException
              */
             function () use ($unpersistedProduct) {
-                $existing = $this->repository->findByName($unpersistedProduct->name);
-
-                if ($existing) {
+                try {
+                    $created = $this->repository->persist($unpersistedProduct);
+                } catch (UniqueConstraintViolationException) {
                     throw new ProductAlreadyExistsException($unpersistedProduct->name);
                 }
-
-                $created = $this->repository->persist($unpersistedProduct);
 
                 $this->inventoryHistoryRepository->record(new UnpersistedInventoryHistoryEntry(
                     productId: $created->id,
@@ -79,7 +78,7 @@ final readonly class ProductService implements ProductServiceInterface
                 ));
 
                 return $created;
-            }
+            },
         );
 
         Cache::tags(['products'])->flush();
@@ -110,6 +109,18 @@ final readonly class ProductService implements ProductServiceInterface
                     throw new ProductNotFoundException($id);
                 }
 
+                // Optimistic locking: reject edits based on a stale copy so a concurrent
+                // sale / edit is not silently overwritten. Omitting `version` opts out.
+                if ($unpersistedProduct->expectedVersion !== null
+                    && $unpersistedProduct->expectedVersion !== $lockedModel->version
+                ) {
+                    throw new ProductVersionConflictException(
+                        $id,
+                        $unpersistedProduct->expectedVersion,
+                        $lockedModel->version,
+                    );
+                }
+
                 $previousQuantity = $lockedModel->quantity;
                 $newQuantity = $unpersistedProduct->quantity;
 
@@ -117,7 +128,11 @@ final readonly class ProductService implements ProductServiceInterface
                     throw new InsufficientStockException($id, $newQuantity, $previousQuantity);
                 }
 
-                $updated = $this->repository->update($id, $unpersistedProduct);
+                try {
+                    $updated = $this->repository->update($id, $unpersistedProduct);
+                } catch (UniqueConstraintViolationException) {
+                    throw new ProductAlreadyExistsException($unpersistedProduct->name);
+                }
 
                 if ($newQuantity !== $previousQuantity) {
                     $this->inventoryHistoryRepository->record(new UnpersistedInventoryHistoryEntry(
@@ -130,10 +145,9 @@ final readonly class ProductService implements ProductServiceInterface
                 }
 
                 return $updated;
-            }
+            },
         );
 
-        Cache::forget("products.{$id}");
         Cache::tags(['products'])->flush();
 
         $this->auditLogger->log('product.updated', 'product', $id, [
@@ -152,7 +166,6 @@ final readonly class ProductService implements ProductServiceInterface
     {
         $result = $this->repository->delete($id);
 
-        Cache::forget("products.{$id}");
         Cache::tags(['products'])->flush();
 
         $this->auditLogger->log('product.deleted', 'product', $id);

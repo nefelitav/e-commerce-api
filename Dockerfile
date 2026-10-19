@@ -37,7 +37,11 @@ RUN mv "$PHP_INI_DIR/php.ini-development" "$PHP_INI_DIR/php.ini"
 
 COPY docker/php/php-dev.ini $PHP_INI_DIR/conf.d/php-dev.ini
 
+COPY docker/php/entrypoint-dev.sh /usr/local/bin/entrypoint-dev
+RUN chmod +x /usr/local/bin/entrypoint-dev
+
 EXPOSE 9000
+ENTRYPOINT ["entrypoint-dev"]
 CMD ["php-fpm"]
 
 # ============================================================

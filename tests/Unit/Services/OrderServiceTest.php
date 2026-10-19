@@ -25,6 +25,7 @@ use App\Repositories\InventoryHistory\InventoryHistoryRepositoryInterface;
 use App\Repositories\Order\OrderRepositoryInterface;
 use App\Repositories\Product\ProductRepositoryInterface;
 use App\Services\AuditLogger;
+use App\Services\Coupon\CouponServiceInterface;
 use App\Services\Order\OrderService;
 use App\Services\Order\OrderStatusMachineInterface;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -49,6 +50,9 @@ class OrderServiceTest extends TestCase
     /** @var OrderStatusMachineInterface&MockObject */
     private OrderStatusMachineInterface $statusMachine;
 
+    /** @var CouponServiceInterface&MockObject */
+    private CouponServiceInterface $couponService;
+
     private OrderService $service;
 
     protected function setUp(): void
@@ -58,11 +62,13 @@ class OrderServiceTest extends TestCase
         $this->productRepository = $this->createMock(ProductRepositoryInterface::class);
         $this->inventoryHistoryRepository = $this->createMock(InventoryHistoryRepositoryInterface::class);
         $this->statusMachine = $this->createMock(OrderStatusMachineInterface::class);
+        $this->couponService = $this->createMock(CouponServiceInterface::class);
         $this->service = new OrderService(
             $this->repository,
             $this->productRepository,
             $this->inventoryHistoryRepository,
             $this->statusMachine,
+            $this->couponService,
             new AuditLogger,
         );
     }
@@ -246,7 +252,7 @@ class OrderServiceTest extends TestCase
         $updated = Order::fromModel(OrderModel::factory()->create(['status' => OrderStatus::Cancelled->value]));
         $this->repository
             ->expects($this->once())
-            ->method('findById')
+            ->method('findByIdForUpdate')
             ->with($id)
             ->willReturn($existingOrder);
         $this->statusMachine
@@ -281,7 +287,7 @@ class OrderServiceTest extends TestCase
         );
         $this->repository
             ->expects($this->once())
-            ->method('findById')
+            ->method('findByIdForUpdate')
             ->with($id)
             ->willReturn(null);
         $this->repository
@@ -307,7 +313,7 @@ class OrderServiceTest extends TestCase
         $updated = Order::fromModel(OrderModel::factory()->create());
         $this->repository
             ->expects($this->once())
-            ->method('findById')
+            ->method('findByIdForUpdate')
             ->with($id)
             ->willReturn($existingOrder);
         $this->statusMachine
@@ -343,7 +349,7 @@ class OrderServiceTest extends TestCase
             'total_price' => 200,
         ]);
         $updated = Order::fromModel($updatedModel);
-        $this->repository->method('findById')->willReturn($existingOrder);
+        $this->repository->method('findByIdForUpdate')->willReturn($existingOrder);
         $this->repository->method('update')->willReturn($updated);
         $result = $this->service->markOrderAsPaid(1, 'pay_ref_123');
         $this->assertSame($updated, $result);
@@ -361,7 +367,7 @@ class OrderServiceTest extends TestCase
             'user_id' => $user->id,
         ]);
         $existingOrder = Order::fromModel($orderModel);
-        $this->repository->method('findById')->willReturn($existingOrder);
+        $this->repository->method('findByIdForUpdate')->willReturn($existingOrder);
         $this->statusMachine
             ->expects($this->once())
             ->method('assertWebhookTransitionAllowed')
@@ -375,7 +381,7 @@ class OrderServiceTest extends TestCase
 
     public function test_mark_order_as_paid_throws_when_order_not_found(): void
     {
-        $this->repository->method('findById')->willReturn(null);
+        $this->repository->method('findByIdForUpdate')->willReturn(null);
         $this->expectException(OrderNotFoundException::class);
         $this->service->markOrderAsPaid(999, 'pay_ref_123');
     }
@@ -394,7 +400,7 @@ class OrderServiceTest extends TestCase
             items: [],
         );
         $updated = Order::fromModel(OrderModel::factory()->create(['status' => OrderStatus::Cancelled->value]));
-        $this->repository->method('findById')->willReturn($existingOrder);
+        $this->repository->method('findByIdForUpdate')->willReturn($existingOrder);
         $this->repository->method('update')->willReturn($updated);
         $this->service->updateOrder(1, $unpersisted);
         Event::assertNotDispatched(OrderPaidEvent::class);
@@ -414,7 +420,7 @@ class OrderServiceTest extends TestCase
             items: [],
         );
         $updated = Order::fromModel(OrderModel::factory()->create(['status' => OrderStatus::Shipped->value]));
-        $this->repository->method('findById')->willReturn($existingOrder);
+        $this->repository->method('findByIdForUpdate')->willReturn($existingOrder);
         $this->repository->method('update')->willReturn($updated);
         $this->service->updateOrder(1, $unpersisted, asAdmin: true);
         Event::assertDispatched(OrderShippedEvent::class, function (OrderShippedEvent $event) use ($updated) {
@@ -436,7 +442,7 @@ class OrderServiceTest extends TestCase
             items: [],
         );
         $updated = Order::fromModel(OrderModel::factory()->create(['status' => OrderStatus::Cancelled->value]));
-        $this->repository->method('findById')->willReturn($existingOrder);
+        $this->repository->method('findByIdForUpdate')->willReturn($existingOrder);
         $this->repository->method('update')->willReturn($updated);
         $this->service->updateOrder(1, $unpersisted);
         Event::assertNotDispatched(OrderShippedEvent::class);
@@ -468,7 +474,7 @@ class OrderServiceTest extends TestCase
             ],
         );
         $this->repository
-            ->method('findById')
+            ->method('findByIdForUpdate')
             ->with($orderModel->id)
             ->willReturn($order);
         $this->productRepository
@@ -501,7 +507,7 @@ class OrderServiceTest extends TestCase
         $id = 1;
         $this->repository
             ->expects($this->once())
-            ->method('findById')
+            ->method('findByIdForUpdate')
             ->with($id)
             ->willReturn(null);
         $this->expectException(OrderNotFoundException::class);

@@ -8,6 +8,7 @@ use App\Exceptions\CategoryAlreadyExistsException;
 use App\Exceptions\CategoryNotFoundException;
 use App\Repositories\Category\CategoryRepositoryInterface;
 use App\Services\AuditLogger;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Cache;
 
@@ -16,12 +17,11 @@ final readonly class CategoryService implements CategoryServiceInterface
     public function __construct(
         private CategoryRepositoryInterface $repository,
         private AuditLogger $auditLogger,
-    ) {
-    }
+    ) {}
 
     /**
-     * @param array<string, mixed> $filters
-     * @param array<string> $includes
+     * @param  array<string, mixed>  $filters
+     * @param  array<string>  $includes
      * @return LengthAwarePaginator<int, Category>
      */
     public function listCategories(
@@ -30,7 +30,7 @@ final readonly class CategoryService implements CategoryServiceInterface
         string $sort = 'id',
         string $order = 'asc',
         array $filters = [],
-        array $includes = []
+        array $includes = [],
     ): LengthAwarePaginator {
         return $this->repository->getAll($page, $perPage, $sort, $order, $filters, $includes);
     }
@@ -53,13 +53,11 @@ final readonly class CategoryService implements CategoryServiceInterface
      */
     public function createCategory(UnpersistedCategory $unpersistedCategory): Category
     {
-        $existing = $this->repository->findByName($unpersistedCategory->name);
-
-        if ($existing) {
+        try {
+            $category = $this->repository->persist($unpersistedCategory);
+        } catch (UniqueConstraintViolationException) {
             throw new CategoryAlreadyExistsException($unpersistedCategory->name);
         }
-
-        $category = $this->repository->persist($unpersistedCategory);
 
         Cache::tags(['categories'])->flush();
 
@@ -77,13 +75,11 @@ final readonly class CategoryService implements CategoryServiceInterface
      */
     public function updateCategory(int $id, UnpersistedCategory $unpersistedCategory): Category
     {
-        $existing = $this->repository->findByName($unpersistedCategory->name);
-
-        if ($existing && $existing->id !== $id) {
+        try {
+            $category = $this->repository->update($id, $unpersistedCategory);
+        } catch (UniqueConstraintViolationException) {
             throw new CategoryAlreadyExistsException($unpersistedCategory->name);
         }
-
-        $category = $this->repository->update($id, $unpersistedCategory);
 
         Cache::tags(['categories'])->flush();
 

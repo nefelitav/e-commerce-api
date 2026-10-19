@@ -1,6 +1,6 @@
 # E-commerce API
 
-A comprehensive RESTful API for e-commerce built with **Laravel 12**, **PHP 8.2+**, **PostgreSQL 16**, **Redis 7**, **Nginx**, and **Docker**.
+A RESTful API for e-commerce built with **Laravel 12**, **PHP 8.2+**, **PostgreSQL 16**, **Redis 7**, **Nginx**, and **Docker**.
 
 ## 🚀 Quick Start
 
@@ -8,9 +8,9 @@ A comprehensive RESTful API for e-commerce built with **Laravel 12**, **PHP 8.2+
 
 ```bash
 docker compose up -d
-docker compose exec app php artisan migrate
-docker compose exec app php artisan db:seed
 ```
+
+On startup the `app` container creates `.env`, installs dependencies, generates the app key, runs migrations and seeds the database (all idempotent). The first boot can take a couple of minutes; follow it with `docker compose logs -f app`.
 
 The API will be available at `http://localhost:8081/api/v1/`
 

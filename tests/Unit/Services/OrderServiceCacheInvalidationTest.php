@@ -17,6 +17,7 @@ use App\Repositories\InventoryHistory\InventoryHistoryRepositoryInterface;
 use App\Repositories\Order\OrderRepositoryInterface;
 use App\Repositories\Product\ProductRepositoryInterface;
 use App\Services\AuditLogger;
+use App\Services\Coupon\CouponServiceInterface;
 use App\Services\Order\OrderService;
 use App\Services\Order\OrderStatusMachineInterface;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -30,12 +31,19 @@ class OrderServiceCacheInvalidationTest extends TestCase
 
     /** @var OrderRepositoryInterface&MockObject */
     private OrderRepositoryInterface $repository;
+
     /** @var ProductRepositoryInterface&MockObject */
     private ProductRepositoryInterface $productRepository;
+
     /** @var InventoryHistoryRepositoryInterface&MockObject */
     private InventoryHistoryRepositoryInterface $inventoryHistoryRepository;
+
     /** @var OrderStatusMachineInterface&MockObject */
     private OrderStatusMachineInterface $statusMachine;
+
+    /** @var CouponServiceInterface&MockObject */
+    private CouponServiceInterface $couponService;
+
     private OrderService $service;
 
     protected function setUp(): void
@@ -47,12 +55,14 @@ class OrderServiceCacheInvalidationTest extends TestCase
         $this->productRepository = $this->createMock(ProductRepositoryInterface::class);
         $this->inventoryHistoryRepository = $this->createMock(InventoryHistoryRepositoryInterface::class);
         $this->statusMachine = $this->createMock(OrderStatusMachineInterface::class);
+        $this->couponService = $this->createMock(CouponServiceInterface::class);
         $this->service = new OrderService(
             $this->repository,
             $this->productRepository,
             $this->inventoryHistoryRepository,
             $this->statusMachine,
-            new AuditLogger(),
+            $this->couponService,
+            new AuditLogger,
         );
     }
 
@@ -62,7 +72,7 @@ class OrderServiceCacheInvalidationTest extends TestCase
         parent::tearDown();
     }
 
-    public function test_createOrder_flushes_product_cache_for_all_ordered_products(): void
+    public function test_create_order_flushes_product_cache_for_all_ordered_products(): void
     {
         $user = UserModel::factory()->create();
 
@@ -116,7 +126,7 @@ class OrderServiceCacheInvalidationTest extends TestCase
         $this->assertFalse(Cache::tags(['products'])->has('products.all.test'));
     }
 
-    public function test_createOrder_does_not_flush_cache_when_product_not_found(): void
+    public function test_create_order_does_not_flush_cache_when_product_not_found(): void
     {
         $user = UserModel::factory()->create();
 
@@ -147,7 +157,7 @@ class OrderServiceCacheInvalidationTest extends TestCase
         $this->assertTrue(Cache::tags(['products'])->has('products.all.test'));
     }
 
-    public function test_createOrder_does_not_flush_cache_when_insufficient_stock(): void
+    public function test_create_order_does_not_flush_cache_when_insufficient_stock(): void
     {
         $user = UserModel::factory()->create();
 
@@ -182,48 +192,4 @@ class OrderServiceCacheInvalidationTest extends TestCase
         $this->assertTrue(Cache::tags(['products'])->has("products.{$product->id}"));
         $this->assertTrue(Cache::tags(['products'])->has('products.all.test'));
     }
-
-    public function test_createOrder_with_single_item_flushes_only_that_product_cache(): void
-    {
-        $user = UserModel::factory()->create();
-
-        /** @var ProductModel $product */
-        $product = ProductModel::factory()->create(['quantity' => 10]);
-        /** @var ProductModel $otherProduct */
-        $otherProduct = ProductModel::factory()->create(['quantity' => 5]);
-
-        Cache::put("products.{$product->id}", 'cached_value', 300);
-        Cache::put("products.{$otherProduct->id}", 'other_cached_value', 300);
-
-        $item = new UnpersistedOrderItem(
-            productId: $product->id,
-            quantity: 3,
-            unitPrice: 50.0,
-        );
-
-        $unpersisted = new UnpersistedOrder(
-            userId: $user->id,
-            status: OrderStatus::Pending,
-            totalPrice: 150,
-            items: [$item],
-        );
-
-        $persisted = Order::fromModel(OrderModel::factory()->create());
-
-        $this->productRepository
-            ->method('findByIdForUpdate')
-            ->willReturn($product);
-
-        $this->inventoryHistoryRepository
-            ->method('record')
-            ->willReturn(InventoryHistoryEntry::fromModel(InventoryHistoryModel::factory()->create()));
-
-        $this->repository->method('persist')->willReturn($persisted);
-
-        $this->service->createOrder($unpersisted);
-
-        $this->assertFalse(Cache::has("products.{$product->id}"));
-        $this->assertTrue(Cache::has("products.{$otherProduct->id}"));
-    }
 }
-

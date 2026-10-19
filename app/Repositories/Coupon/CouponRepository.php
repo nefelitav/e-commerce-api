@@ -95,28 +95,39 @@ class CouponRepository implements CouponRepositoryInterface
      */
     public function delete(int $id): bool
     {
-        /** @var CouponModel|null $model */
-        $model = CouponModel::query()->where('id', $id)->first();
-
-        if (! $model) {
+        if (CouponModel::query()->whereKey($id)->delete() === 0) {
             throw new CouponNotFoundException($id);
         }
 
-        return $model->delete();
+        return true;
     }
 
     /**
      * @throws CouponNotFoundException
      */
-    public function incrementUsage(int $id): void
+    public function incrementUsage(int $id): bool
     {
-        /** @var CouponModel|null $model */
-        $model = CouponModel::query()->where('id', $id)->first();
+        // Single conditional UPDATE: the max_uses check and the increment cannot interleave.
+        $affected = CouponModel::query()
+            ->where('id', $id)
+            ->where(static function ($query): void {
+                $query->whereNull('max_uses')->orWhereColumn('times_used', '<', 'max_uses');
+            })
+            ->increment('times_used');
 
-        if (! $model) {
+        if ($affected > 0) {
+            return true;
+        }
+
+        if (! CouponModel::query()->where('id', $id)->exists()) {
             throw new CouponNotFoundException($id);
         }
 
-        $model->increment('times_used');
+        return false;
+    }
+
+    public function decrementUsage(int $id): void
+    {
+        CouponModel::query()->where('id', $id)->where('times_used', '>', 0)->decrement('times_used');
     }
 }

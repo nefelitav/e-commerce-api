@@ -7,12 +7,13 @@ use App\Models\Product\ProductModel;
 final readonly class Product
 {
     public function __construct(
-        public int    $id,
-        public string  $name,
+        public int $id,
+        public string $name,
         public ?string $description,
         public float $price,
         public int $quantity,
-        public int    $categoryId,
+        public int $categoryId,
+        public int $version = 1,
     ) {}
 
     public static function fromModel(ProductModel $product): self
@@ -24,7 +25,7 @@ final readonly class Product
             $product->price,
             $product->quantity,
             $product->category_id,
+            $product->version,
         );
     }
-
 }

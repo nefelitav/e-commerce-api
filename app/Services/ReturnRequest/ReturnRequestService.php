@@ -3,12 +3,14 @@
 namespace App\Services\ReturnRequest;
 
 use App\Dto\InventoryHistory\UnpersistedInventoryHistoryEntry;
+use App\Dto\Order\Order;
 use App\Dto\Order\UnpersistedOrder;
 use App\Dto\ReturnRequest\ReturnRequest;
 use App\Dto\ReturnRequest\UnpersistedReturnRequest;
 use App\Enums\InventoryChangeType;
 use App\Enums\OrderStatus;
 use App\Enums\ReturnRequestStatus;
+use App\Exceptions\InvalidOrderStateException;
 use App\Exceptions\InvalidReturnRequestStateException;
 use App\Exceptions\OrderNotFoundException;
 use App\Exceptions\ReturnRequestNotFoundException;
@@ -17,6 +19,8 @@ use App\Repositories\Order\OrderRepositoryInterface;
 use App\Repositories\Product\ProductRepositoryInterface;
 use App\Repositories\ReturnRequest\ReturnRequestRepositoryInterface;
 use App\Services\AuditLogger;
+use App\Services\Order\OrderStatusMachineInterface;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -28,6 +32,7 @@ final readonly class ReturnRequestService implements ReturnRequestServiceInterfa
         private OrderRepositoryInterface $orderRepository,
         private ProductRepositoryInterface $productRepository,
         private InventoryHistoryRepositoryInterface $inventoryHistoryRepository,
+        private OrderStatusMachineInterface $statusMachine,
         private AuditLogger $auditLogger,
     ) {}
 
@@ -62,24 +67,16 @@ final readonly class ReturnRequestService implements ReturnRequestServiceInterfa
             throw new OrderNotFoundException($returnRequest->orderId);
         }
 
-        $allowedStatuses = [OrderStatus::Delivered, OrderStatus::Paid, OrderStatus::Shipped];
-        if (! in_array($order->status, $allowedStatuses, true)) {
-            $allowed = implode(', ', array_map(static fn (OrderStatus $s) => $s->value, $allowedStatuses));
+        $this->assertOrderReturnable($order);
 
-            throw new InvalidReturnRequestStateException(
-                "Cannot create return request for order with status '{$order->status->value}'. "
-                ."Order must be in one of: {$allowed}.",
-            );
-        }
-
-        $existing = $this->repository->findByOrderId($returnRequest->orderId);
-        if ($existing !== null && $existing->status !== ReturnRequestStatus::Rejected) {
+        try {
+            $created = $this->repository->persist($returnRequest);
+        } catch (UniqueConstraintViolationException) {
+            // Partial unique index: one non-rejected return request per order.
             throw new InvalidReturnRequestStateException(
                 'A return request already exists for this order.',
             );
         }
-
-        $created = $this->repository->persist($returnRequest);
 
         $this->auditLogger->log('return_request.created', 'return_request', $created->id, [
             'order_id' => $created->orderId,
@@ -96,26 +93,29 @@ final readonly class ReturnRequestService implements ReturnRequestServiceInterfa
      */
     public function approveReturnRequest(int $id, ?string $adminNotes = null): ReturnRequest
     {
-        $returnRequest = $this->repository->findById($id);
+        /** @var array{0: ReturnRequest, 1: ReturnRequest} $result */
+        $result = DB::transaction(function () use ($id, $adminNotes) {
+            // Lock + re-check inside the transaction so two admins approving at once
+            // cannot both restore stock.
+            $returnRequest = $this->lockPending($id, 'approve');
 
-        if ($returnRequest === null) {
-            throw new ReturnRequestNotFoundException($id);
-        }
+            $order = $this->orderRepository->findByIdForUpdate($returnRequest->orderId);
 
-        if ($returnRequest->status !== ReturnRequestStatus::Pending) {
-            throw new InvalidReturnRequestStateException(
-                "Cannot approve return request: current status is '{$returnRequest->status->value}', expected '".ReturnRequestStatus::Pending->value."'.",
-            );
-        }
+            // The order may have been cancelled / refunded since the request was created.
+            if ($order !== null) {
+                $this->assertOrderReturnable($order);
+            }
 
-        /** @var ReturnRequest $approved */
-        $approved = DB::transaction(function () use ($id, $adminNotes, $returnRequest) {
             $approved = $this->repository->updateStatus($id, ReturnRequestStatus::Approved, $adminNotes);
 
-            $order = $this->orderRepository->findById($returnRequest->orderId);
-
             if ($order !== null) {
-                foreach ($order->items as $item) {
+                $restoreStock = ! $order->stockRestored;
+
+                // Same stable lock order as order creation, to avoid deadlocks.
+                $items = $order->items;
+                usort($items, static fn ($a, $b) => $a->productId <=> $b->productId);
+
+                foreach ($restoreStock ? $items : [] as $item) {
                     $productModel = $this->productRepository->findByIdForUpdate($item->productId);
 
                     if ($productModel !== null) {
@@ -134,6 +134,10 @@ final readonly class ReturnRequestService implements ReturnRequestServiceInterfa
                     }
                 }
 
+                if ($restoreStock) {
+                    $this->orderRepository->markStockRestored($order->id);
+                }
+
                 $this->orderRepository->update($order->id, new UnpersistedOrder(
                     userId: $order->userId,
                     status: OrderStatus::Refunded,
@@ -142,8 +146,9 @@ final readonly class ReturnRequestService implements ReturnRequestServiceInterfa
                 ));
             }
 
-            return $approved;
+            return [$returnRequest, $approved];
         });
+        [$returnRequest, $approved] = $result;
 
         Cache::tags(['products'])->flush();
 
@@ -161,19 +166,13 @@ final readonly class ReturnRequestService implements ReturnRequestServiceInterfa
      */
     public function rejectReturnRequest(int $id, ?string $adminNotes = null): ReturnRequest
     {
-        $returnRequest = $this->repository->findById($id);
+        /** @var array{0: ReturnRequest, 1: ReturnRequest} $result */
+        $result = DB::transaction(function () use ($id, $adminNotes) {
+            $returnRequest = $this->lockPending($id, 'reject');
 
-        if ($returnRequest === null) {
-            throw new ReturnRequestNotFoundException($id);
-        }
-
-        if ($returnRequest->status !== ReturnRequestStatus::Pending) {
-            throw new InvalidReturnRequestStateException(
-                "Cannot reject return request: current status is '{$returnRequest->status->value}', expected '".ReturnRequestStatus::Pending->value."'.",
-            );
-        }
-
-        $rejected = $this->repository->updateStatus($id, ReturnRequestStatus::Rejected, $adminNotes);
+            return [$returnRequest, $this->repository->updateStatus($id, ReturnRequestStatus::Rejected, $adminNotes)];
+        });
+        [$returnRequest, $rejected] = $result;
 
         $this->auditLogger->log('return_request.rejected', 'return_request', $id, [
             'order_id' => $returnRequest->orderId,
@@ -181,5 +180,38 @@ final readonly class ReturnRequestService implements ReturnRequestServiceInterfa
         ]);
 
         return $rejected;
+    }
+
+    /**
+     * @throws ReturnRequestNotFoundException
+     * @throws InvalidReturnRequestStateException
+     */
+    private function lockPending(int $id, string $action): ReturnRequest
+    {
+        $returnRequest = $this->repository->findByIdForUpdate($id);
+
+        if ($returnRequest === null) {
+            throw new ReturnRequestNotFoundException($id);
+        }
+
+        if ($returnRequest->status !== ReturnRequestStatus::Pending) {
+            throw new InvalidReturnRequestStateException(
+                "Cannot {$action} return request: current status is '{$returnRequest->status->value}', expected '".ReturnRequestStatus::Pending->value."'.",
+            );
+        }
+
+        return $returnRequest;
+    }
+
+    /**
+     * @throws InvalidReturnRequestStateException
+     */
+    private function assertOrderReturnable(Order $order): void
+    {
+        try {
+            $this->statusMachine->assertReturnAllowed($order);
+        } catch (InvalidOrderStateException $e) {
+            throw new InvalidReturnRequestStateException($e->getMessage());
+        }
     }
 }

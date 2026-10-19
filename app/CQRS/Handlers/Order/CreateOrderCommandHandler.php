@@ -23,31 +23,31 @@ readonly class CreateOrderCommandHandler implements CommandHandlerInterface
     ) {}
 
     /**
-     * @param CreateOrderCommand $command
+     * @param  CreateOrderCommand  $command
+     *
      * @throws ProductNotFoundException
      * @throws InsufficientStockException
      */
     public function handle(CommandInterface $command): Order
     {
         $items = array_map(
-            static fn(CreateOrderCommandItem $item) => new UnpersistedOrderItem(
+            static fn (CreateOrderCommandItem $item) => new UnpersistedOrderItem(
                 productId: $item->productId,
-                quantity:  $item->quantity,
+                quantity: $item->quantity,
                 unitPrice: $item->unitPrice,
             ),
             $command->items,
         );
 
         $unpersistedOrder = new UnpersistedOrder(
-            userId:     $command->userId,
-            status:     $command->status,
+            userId: $command->userId,
+            status: $command->status,
             totalPrice: $command->totalPrice,
-            items:      $items,
+            items: $items,
+            couponCode: $command->couponCode,
+            idempotencyKey: $command->idempotencyKey,
         );
 
         return $this->orderService->createOrder($unpersistedOrder);
     }
 }
-
-
-

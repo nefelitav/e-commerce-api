@@ -42,11 +42,9 @@ php artisan serve         # → http://localhost:8000/api/v1/
 
 ```bash
 docker compose up -d --build
-docker compose exec app composer install
-docker compose exec app cp .env.example .env
-docker compose exec app php artisan key:generate
-docker compose exec app php artisan migrate
 ```
+
+The `app` container's entrypoint (`docker/php/entrypoint-dev.sh`) copies `.env`, runs `composer install`, generates the app key, migrates and seeds on every start. All steps are idempotent.
 
 API available at `http://localhost:8081/api/v1/`
 

@@ -10,8 +10,8 @@ use Illuminate\Pagination\LengthAwarePaginator;
 interface OrderRepositoryInterface
 {
     /**
-     * @param array<string, mixed> $filters
-     * @param array<string> $includes
+     * @param  array<string, mixed>  $filters
+     * @param  array<string>  $includes
      * @return LengthAwarePaginator<int, Order>
      */
     public function getAll(
@@ -20,10 +20,19 @@ interface OrderRepositoryInterface
         string $sort = 'id',
         string $order = 'asc',
         array $filters = [],
-        array $includes = []
+        array $includes = [],
     ): LengthAwarePaginator;
 
     public function findById(int $id): ?Order;
+
+    /**
+     * Fetch an order (with items) holding a row lock; must run inside a transaction.
+     */
+    public function findByIdForUpdate(int $id): ?Order;
+
+    public function markStockRestored(int $id): void;
+
+    public function findByIdempotencyKey(int $userId, string $key): ?Order;
 
     public function persist(UnpersistedOrder $unpersistedOrder): Order;
 
@@ -37,4 +46,3 @@ interface OrderRepositoryInterface
      */
     public function delete(int $id): bool;
 }
-

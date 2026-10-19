@@ -7,13 +7,14 @@ use App\Dto\Product\UnpersistedProduct;
 use App\Exceptions\InsufficientStockException;
 use App\Exceptions\ProductAlreadyExistsException;
 use App\Exceptions\ProductNotFoundException;
+use App\Exceptions\ProductVersionConflictException;
 use Illuminate\Pagination\LengthAwarePaginator;
 
 interface ProductServiceInterface
 {
     /**
-     * @param array<string, mixed> $filters
-     * @param array<string> $includes
+     * @param  array<string, mixed>  $filters
+     * @param  array<string>  $includes
      * @return LengthAwarePaginator<int, Product>
      */
     public function listProducts(
@@ -22,7 +23,7 @@ interface ProductServiceInterface
         string $sort = 'id',
         string $order = 'asc',
         array $filters = [],
-        array $includes = []
+        array $includes = [],
     ): LengthAwarePaginator;
 
     /**
@@ -40,6 +41,8 @@ interface ProductServiceInterface
     /**
      * @throws ProductNotFoundException
      * @throws InsufficientStockException
+     * @throws ProductVersionConflictException
+     * @throws ProductAlreadyExistsException
      */
     public function updateProduct(int $id, UnpersistedProduct $unpersistedProduct): Product;
 
@@ -48,4 +51,3 @@ interface ProductServiceInterface
      */
     public function deleteProduct(int $id): bool;
 }
-

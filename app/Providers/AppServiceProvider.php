@@ -100,8 +100,7 @@ class AppServiceProvider extends ServiceProvider
         $router->aliasMiddleware('auth.required', RequireAuth::class);
         $router->aliasMiddleware('admin.required', RequireAdmin::class);
 
-        Route::prefix('api')
-            ->middleware(['api', 'throttle:api'])
+        Route::middleware(['api', 'throttle:api'])
             ->group(base_path('routes/api.php'));
 
         // Configure API rate limiting

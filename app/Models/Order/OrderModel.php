@@ -22,6 +22,8 @@ use Illuminate\Support\Carbon;
  * @property float $total_price
  * @property int|null $coupon_id
  * @property float $discount_amount
+ * @property string|null $idempotency_key
+ * @property Carbon|null $stock_restored_at
  * @property Carbon|null $created_at
  * @property UserModel $user
  * @property CouponModel|null $coupon
@@ -45,6 +47,7 @@ class OrderModel extends Model
         'total_price',
         'coupon_id',
         'discount_amount',
+        'idempotency_key',
     ];
 
     /**
@@ -54,6 +57,7 @@ class OrderModel extends Model
     {
         return [
             'status' => OrderStatus::class,
+            'stock_restored_at' => 'datetime',
         ];
     }
 

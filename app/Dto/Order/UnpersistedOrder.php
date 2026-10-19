@@ -7,13 +7,17 @@ use App\Enums\OrderStatus;
 final readonly class UnpersistedOrder
 {
     /**
-     * @param array<int, UnpersistedOrderItem> $items
+     * @param  array<int, UnpersistedOrderItem>  $items
      */
     public function __construct(
         public int $userId,
         public OrderStatus $status,
         public float $totalPrice,
         public array $items = [],
+        public ?string $couponCode = null,
+        public ?int $couponId = null,
+        public float $discountAmount = 0.0,
+        public ?string $idempotencyKey = null,
     ) {}
 
     /**
@@ -21,15 +25,26 @@ final readonly class UnpersistedOrder
      */
     public function toArray(): array
     {
-        return [
-            'user_id'     => $this->userId,
-            'status'      => $this->status->value,
+        $data = [
+            'user_id' => $this->userId,
+            'status' => $this->status->value,
             'total_price' => $this->totalPrice,
         ];
+
+        // Only written when set, so status-only updates never wipe them.
+        if ($this->couponId !== null) {
+            $data['coupon_id'] = $this->couponId;
+            $data['discount_amount'] = $this->discountAmount;
+        }
+        if ($this->idempotencyKey !== null) {
+            $data['idempotency_key'] = $this->idempotencyKey;
+        }
+
+        return $data;
     }
 
     /**
-     * @param array<string, mixed> $data
+     * @param  array<string, mixed>  $data
      */
     public static function fromArray(array $data): self
     {
@@ -43,10 +58,10 @@ final readonly class UnpersistedOrder
         }
 
         return new self(
-            userId:     $data['user_id'],
-            status:     OrderStatus::from($data['status']),
+            userId: $data['user_id'],
+            status: OrderStatus::from($data['status']),
             totalPrice: (float) $data['total_price'],
-            items:      $items,
+            items: $items,
         );
     }
 }

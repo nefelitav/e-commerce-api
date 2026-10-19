@@ -31,6 +31,12 @@ class CouponModel extends Model
 
     protected $table = 'coupons';
 
+    // Mirror the column defaults so a freshly created model (not re-read from the DB) is complete.
+    protected $attributes = [
+        'times_used' => 0,
+        'is_active' => true,
+    ];
+
     protected $fillable = [
         'code',
         'type',

@@ -22,8 +22,7 @@ final readonly class ListInventoryHistoryController extends Controller
         private InventoryHistoryService $service,
         private InventoryHistoryTransformer $transformer,
         private Logger $logger,
-    ) {
-    }
+    ) {}
 
     public function index(ListInventoryHistoryRequest $request): JsonResponse
     {
@@ -38,22 +37,30 @@ final readonly class ListInventoryHistoryController extends Controller
             /** @var array<string, mixed> $validatedData */
             $validatedData = $request->validated();
 
-            $entries = $this->service->listByProductId($validatedData['id']);
+            $paginator = $this->service->listByProductId(
+                (int) $validatedData['id'],
+                (int) ($validatedData['page'] ?? 1),
+                (int) ($validatedData['per_page'] ?? 100),
+            );
         } catch (Exception $e) {
             throw new UnprocessableEntityException($e);
         }
 
         $entriesArray = [];
-        foreach ($entries as $entry) {
+        foreach ($paginator->items() as $entry) {
             $entriesArray[] = $this->transformer->transform($entry);
         }
 
-        $this->logger->info("Inventory history found.", [
-            "product_id" => $validatedData['id'],
-            "entries" => $entriesArray,
+        $this->logger->info('Inventory history found.', [
+            'product_id' => $validatedData['id'],
+            'entries' => count($entriesArray),
         ]);
 
-        return new ListInventoryHistoryResponse($entriesArray);
+        return new ListInventoryHistoryResponse($entriesArray, [
+            'current_page' => $paginator->currentPage(),
+            'per_page' => $paginator->perPage(),
+            'total' => $paginator->total(),
+            'last_page' => $paginator->lastPage(),
+        ]);
     }
 }
-

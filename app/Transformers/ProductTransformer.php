@@ -18,6 +18,7 @@ final readonly class ProductTransformer
             'quantity' => $product->quantity,
             'description' => $product->description,
             'category_id' => $product->categoryId,
+            'version' => $product->version,
         ];
     }
 }

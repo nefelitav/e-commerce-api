@@ -8,14 +8,14 @@ use App\Enums\OrderStatus;
 final readonly class CreateOrderCommand implements CommandInterface
 {
     /**
-     * @param array<int, CreateOrderCommandItem> $items
+     * @param  array<int, CreateOrderCommandItem>  $items
      */
     public function __construct(
-        public int         $userId,
+        public int $userId,
         public OrderStatus $status,
-        public float       $totalPrice,
-        public array       $items,
+        public float $totalPrice,
+        public array $items,
+        public ?string $couponCode = null,
+        public ?string $idempotencyKey = null,
     ) {}
 }
-
-

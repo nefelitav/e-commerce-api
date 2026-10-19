@@ -149,14 +149,6 @@ class ProductRepository implements ProductRepositoryInterface
         return $product;
     }
 
-    public function findByName(string $name): ?Product
-    {
-        /** @var ProductModel|null $productModel */
-        $productModel = ProductModel::query()->where('name', $name)->first();
-
-        return $productModel ? Product::fromModel($productModel) : null;
-    }
-
     public function persist(UnpersistedProduct $unpersistedProduct): Product
     {
         /** @var ProductModel $productModel */
@@ -194,13 +186,10 @@ class ProductRepository implements ProductRepositoryInterface
      */
     public function delete(int $id): bool
     {
-        /** @var ProductModel|null $productModel */
-        $productModel = ProductModel::query()->where('id', $id)->first();
-
-        if (! $productModel) {
+        if (ProductModel::query()->whereKey($id)->delete() === 0) {
             throw new ProductNotFoundException($id);
         }
 
-        return $productModel->delete();
+        return true;
     }
 }

@@ -10,6 +10,7 @@ use App\Models\Category\CategoryModel;
 use App\Repositories\Category\CategoryRepositoryInterface;
 use App\Services\AuditLogger;
 use App\Services\Category\CategoryService;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Tests\TestCase;
@@ -18,8 +19,9 @@ class CategoryServiceTest extends TestCase
 {
     use RefreshDatabase;
 
-    /** @var CategoryRepositoryInterface&\PHPUnit\Framework\MockObject\MockObject $repository */
+    /** @var CategoryRepositoryInterface&\PHPUnit\Framework\MockObject\MockObject */
     private CategoryRepositoryInterface $repository;
+
     private CategoryService $service;
 
     protected function setUp(): void
@@ -27,7 +29,7 @@ class CategoryServiceTest extends TestCase
         parent::setUp();
 
         $this->repository = $this->createMock(CategoryRepositoryInterface::class);
-        $this->service = new CategoryService($this->repository, new AuditLogger());
+        $this->service = new CategoryService($this->repository, new AuditLogger);
     }
 
     protected function tearDown(): void
@@ -35,7 +37,7 @@ class CategoryServiceTest extends TestCase
         parent::tearDown();
     }
 
-    public function test_listCategories_returns_array_of_categories(): void
+    public function test_list_categories_returns_array_of_categories(): void
     {
         $categoryModels = CategoryModel::factory()->count(2)->make();
 
@@ -43,7 +45,7 @@ class CategoryServiceTest extends TestCase
             $categoryModels,
             count($categoryModels),
             15,
-            1
+            1,
         );
 
         $this->repository
@@ -56,7 +58,7 @@ class CategoryServiceTest extends TestCase
         $this->assertSame($paginator, $result);
     }
 
-    public function test_listSubcategories_returns_array_of_categories(): void
+    public function test_list_subcategories_returns_array_of_categories(): void
     {
         $parent_id = 1;
         $subcategories = [CategoryModel::factory()->create()];
@@ -71,7 +73,7 @@ class CategoryServiceTest extends TestCase
         $this->assertSame($subcategories, $result);
     }
 
-    public function test_getCategoryById_returns_category(): void
+    public function test_get_category_by_id_returns_category(): void
     {
         $id = 1;
         $category = Category::fromModel(CategoryModel::factory()->create());
@@ -87,7 +89,7 @@ class CategoryServiceTest extends TestCase
         $this->assertSame($category, $result);
     }
 
-    public function test_getCategoryById_returns_null(): void
+    public function test_get_category_by_id_returns_null(): void
     {
         $id = 1;
 
@@ -102,7 +104,7 @@ class CategoryServiceTest extends TestCase
         $this->assertNull($result);
     }
 
-    public function test_createCategory_throws_if_category_exists(): void
+    public function test_create_category_maps_unique_violation_to_already_exists(): void
     {
         $unpersisted = new UnpersistedCategory(
             name: 'ExistingCategory',
@@ -110,20 +112,17 @@ class CategoryServiceTest extends TestCase
             parentId: null,
         );
 
-        $existingCategory = CategoryModel::factory()->create();
-
         $this->repository
             ->expects($this->once())
-            ->method('findByName')
-            ->with('ExistingCategory')
-            ->willReturn(Category::fromModel($existingCategory));
+            ->method('persist')
+            ->willThrowException(new UniqueConstraintViolationException('pgsql', 'insert', [], new \Exception('duplicate key')));
 
         $this->expectException(CategoryAlreadyExistsException::class);
 
         $this->service->createCategory($unpersisted);
     }
 
-    public function test_createCategory_persists_and_returns_category(): void
+    public function test_create_category_persists_and_returns_category(): void
     {
         $unpersisted = new UnpersistedCategory(
             name: 'NewCategory',
@@ -132,12 +131,6 @@ class CategoryServiceTest extends TestCase
         );
 
         $persistedCategory = Category::fromModel(CategoryModel::factory()->create());
-
-        $this->repository
-            ->expects($this->once())
-            ->method('findByName')
-            ->with('NewCategory')
-            ->willReturn(null);
 
         $this->repository
             ->expects($this->once())
@@ -150,7 +143,7 @@ class CategoryServiceTest extends TestCase
         $this->assertEquals($persistedCategory, $result);
     }
 
-    public function test_updateCategory_calls_repository_update(): void
+    public function test_update_category_calls_repository_update(): void
     {
         $id = 1;
         $unpersisted = new UnpersistedCategory(
@@ -171,14 +164,14 @@ class CategoryServiceTest extends TestCase
         $this->assertSame($updatedCategory, $result);
     }
 
-    public function test_updateCategory_throws_CategoryNotFoundException(): void
+    public function test_update_category_throws_category_not_found_exception(): void
     {
         $id = 1;
 
         $unpersisted = new UnpersistedCategory(
             name: 'UpdatedCategory',
             description: 'Updated description',
-            parentId: null
+            parentId: null,
         );
 
         $this->repository
@@ -192,7 +185,7 @@ class CategoryServiceTest extends TestCase
         $this->service->updateCategory($id, $unpersisted);
     }
 
-    public function test_deleteCategory_returns_true(): void
+    public function test_delete_category_returns_true(): void
     {
         $id = 1;
 
@@ -207,7 +200,7 @@ class CategoryServiceTest extends TestCase
         $this->assertTrue($result);
     }
 
-    public function test_deleteCategory_throws_CategoryNotFoundException(): void
+    public function test_delete_category_throws_category_not_found_exception(): void
     {
         $id = 1;
 

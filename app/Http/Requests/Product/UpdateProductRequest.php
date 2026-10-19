@@ -31,6 +31,7 @@ final class UpdateProductRequest extends FormRequest
             'price' => 'required|numeric|min:0.01',
             'quantity' => 'required|integer|min:0',
             'category_id' => 'nullable|integer|exists:categories,id',
+            'version' => 'nullable|integer|min:1',
         ];
     }
 }

@@ -45,6 +45,17 @@ final readonly class OrderStatusMachine implements OrderStatusMachineInterface
     ];
 
     /**
+     * Statuses in which a return request may be created or approved.
+     *
+     * @var list<OrderStatus>
+     */
+    private const RETURN_ELIGIBLE_STATUSES = [
+        OrderStatus::Delivered,
+        OrderStatus::Paid,
+        OrderStatus::Shipped,
+    ];
+
+    /**
      * @throws InvalidOrderStateException
      */
     public function assertUserTransitionAllowed(Order $existing, OrderStatus $newStatus): void
@@ -98,6 +109,21 @@ final readonly class OrderStatusMachine implements OrderStatusMachineInterface
         if (! in_array($newStatus, $allowed, strict: true)) {
             throw new InvalidOrderStateException(
                 "Webhook transition from '{$existing->status->value}' to '{$newStatus->value}' is not allowed.",
+            );
+        }
+    }
+
+    /**
+     * @throws InvalidOrderStateException
+     */
+    public function assertReturnAllowed(Order $order): void
+    {
+        if (! in_array($order->status, self::RETURN_ELIGIBLE_STATUSES, strict: true)) {
+            $allowed = implode(', ', array_map(static fn (OrderStatus $s) => $s->value, self::RETURN_ELIGIBLE_STATUSES));
+
+            throw new InvalidOrderStateException(
+                "A return request is not possible for an order with status '{$order->status->value}'. "
+                ."Order must be in one of: {$allowed}.",
             );
         }
     }

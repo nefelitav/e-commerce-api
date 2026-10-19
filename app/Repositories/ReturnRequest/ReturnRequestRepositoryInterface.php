@@ -24,7 +24,10 @@ interface ReturnRequestRepositoryInterface
 
     public function findById(int $id): ?ReturnRequest;
 
-    public function findByOrderId(int $orderId): ?ReturnRequest;
+    /**
+     * Fetch a return request holding a row lock; must run inside a transaction.
+     */
+    public function findByIdForUpdate(int $id): ?ReturnRequest;
 
     public function persist(UnpersistedReturnRequest $returnRequest): ReturnRequest;
 

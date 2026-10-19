@@ -5,11 +5,12 @@ namespace App\Dto\Product;
 final readonly class UnpersistedProduct
 {
     public function __construct(
-        public string  $name,
+        public string $name,
         public ?string $description,
-        public float   $price,
-        public int     $quantity,
-        public int    $categoryId,
+        public float $price,
+        public int $quantity,
+        public int $categoryId,
+        public ?int $expectedVersion = null,
     ) {}
 
     /**
@@ -27,7 +28,7 @@ final readonly class UnpersistedProduct
     }
 
     /**
-     * @param array<string, mixed> $data
+     * @param  array<string, mixed>  $data
      */
     public static function fromArray(array $data): self
     {
@@ -37,6 +38,7 @@ final readonly class UnpersistedProduct
             $data['price'],
             $data['quantity'],
             $data['category_id'],
+            isset($data['version']) ? (int) $data['version'] : null,
         );
     }
 }

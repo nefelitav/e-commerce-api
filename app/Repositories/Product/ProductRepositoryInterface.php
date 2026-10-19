@@ -6,13 +6,14 @@ use App\Dto\Product\Product;
 use App\Dto\Product\UnpersistedProduct;
 use App\Exceptions\ProductNotFoundException;
 use App\Models\Product\ProductModel;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Pagination\LengthAwarePaginator;
 
 interface ProductRepositoryInterface
 {
     /**
-     * @param array<string, mixed> $filters
-     * @param array<string> $includes
+     * @param  array<string, mixed>  $filters
+     * @param  array<string>  $includes
      * @return LengthAwarePaginator<int, Product>
      */
     public function getAll(
@@ -21,7 +22,7 @@ interface ProductRepositoryInterface
         string $sort = 'id',
         string $order = 'asc',
         array $filters = [],
-        array $includes = []
+        array $includes = [],
     ): LengthAwarePaginator;
 
     /**
@@ -33,12 +34,14 @@ interface ProductRepositoryInterface
 
     public function findByIdForUpdate(int $id): ?ProductModel;
 
-    public function findByName(string $name): ?Product;
-
+    /**
+     * @throws UniqueConstraintViolationException when the name is already taken
+     */
     public function persist(UnpersistedProduct $unpersistedProduct): Product;
 
     /**
      * @throws ProductNotFoundException
+     * @throws UniqueConstraintViolationException when the name is already taken
      */
     public function update(int $id, UnpersistedProduct $unpersistedProduct): Product;
 
@@ -47,4 +50,3 @@ interface ProductRepositoryInterface
      */
     public function delete(int $id): bool;
 }
-
